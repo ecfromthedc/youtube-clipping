@@ -28,5 +28,13 @@ brief:
   # Top-N combos to feature in each section.
   top_n: 5
 
+transcribe:
+  # whisper.cpp is the default engine (3–5x faster). Falls back to openai-whisper
+  # automatically if no whisper.cpp binary is found. Run scripts/setup-whisper.sh once.
+  binary:   # whisper-cli (auto-detected if blank); or set WHISPER_CPP_BIN
+  model: models/ggml-base.en.bin   # GGML model; relative to repo root or absolute
+  language: en
+  openai_model: small              # only used by the openai-whisper fallback
+
 platforms: [youtube, tiktok, instagram]
 lanes: [whop, owned]   # whop = cash engine (permissioned), owned = YPP asset

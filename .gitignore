@@ -12,3 +12,4 @@ config/niches.yaml
 .claude/
 data/clips/
 data/*.md
+models/

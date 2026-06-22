@@ -23,7 +23,8 @@ from pathlib import Path
 
 from . import db, enhance
 from .config import ROOT
-from .srt import Segment, parse_srt, slice_and_shift, to_srt
+from .srt import Segment, slice_and_shift, to_srt
+from .transcribe import transcribe
 
 CLIPS_DIR = ROOT / "data" / "clips"
 HOOK_WORDS = {"why", "how", "never", "secret", "nobody", "actually", "truth",
@@ -95,14 +96,7 @@ def download(url: str, workdir: Path) -> Path:
     return out
 
 
-def transcribe(video: Path, workdir: Path, model: str = "small") -> list[Segment]:
-    cmd = ["whisper", str(video), "--model", model, "--output_format", "srt",
-           "--output_dir", str(workdir), "--language", "en", "--verbose", "False"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-    srt = workdir / f"{video.stem}.srt"
-    if proc.returncode != 0 or not srt.exists():
-        raise RuntimeError(f"transcribe failed: {proc.stderr.strip()[:300]}")
-    return parse_srt(srt.read_text())
+# transcribe() now lives in transcribe.py (whisper.cpp default, openai-whisper fallback)
 
 
 def cut_vertical(video: Path, cand: Candidate, srt_text: str, out_path: Path,

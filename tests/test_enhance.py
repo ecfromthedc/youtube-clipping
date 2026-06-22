@@ -6,23 +6,21 @@ from pathlib import Path
 from ycp import enhance
 
 
-def test_escape_drawtext():
-    out = enhance.escape_drawtext("time: 5'oclock 50%")
-    assert r"\:" in out and r"\'" in out and r"\%" in out
+def test_title_filter_uses_textfile():
+    f = enhance.title_filter("title.txt")
+    assert f.startswith("drawtext=")
+    assert "textfile='title.txt'" in f       # escaping-proof: text read from a file
+    assert "fontsize=" in f
 
 
-def test_title_filter_contains_text_and_drawtext():
-    f = enhance.title_filter("Why nobody told you")
-    assert f.startswith("drawtext=") and "Why nobody told you" in f and "fontsize=" in f
-
-
-def test_cta_filter_is_timed():
-    f = enhance.cta_filter("Subscribe", 2.0, 7.0)
-    assert "enable='between(t,2.0,7.0)'" in f and "Subscribe" in f
+def test_cta_filter_is_timed_and_filebacked():
+    f = enhance.cta_filter("cta.txt", 2.0, 7.0)
+    assert "textfile='cta.txt'" in f
+    assert "enable='between(t,2.0,7.0)'" in f
 
 
 def test_hook_cta_vf_combines_and_empties():
-    both = enhance.hook_cta_vf("Title", "CTA", (2, 7))
+    both = enhance.hook_cta_vf("title.txt", "cta.txt", (2, 7))
     assert both.count("drawtext=") == 2
     assert enhance.hook_cta_vf(None, None, (2, 7)) == ""
 

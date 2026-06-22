@@ -2,8 +2,12 @@
 
 Replaces Ssemble's "Hook Title & CTA" and "Game Video" features with local ffmpeg.
 The filter/command *builders* are pure functions (unit-tested without running
-ffmpeg); the thin `apply_*` wrappers execute them. Fonts default to a macOS system
-font so drawtext works without fontconfig setup.
+ffmpeg); the thin `apply_*` wrappers execute them.
+
+Title/CTA text is passed to ffmpeg via `textfile=` (ffmpeg reads it from a file),
+which sidesteps drawtext's fragile inline-text escaping — so titles with
+apostrophes/colons (e.g. "Don't sleep on 5:00") render correctly. The font is a
+stock macOS font (always present, no spaces in the path).
 
 See SSEMBLE-PARITY.md for the full map.
 """
@@ -12,40 +16,33 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-# A font that exists on stock macOS; override per call if needed.
-DEFAULT_FONT = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+# Stock macOS font — always present, no spaces in the path (drawtext-safe).
+DEFAULT_FONT = "/System/Library/Fonts/Helvetica.ttc"
 
 
-def escape_drawtext(text: str) -> str:
-    """Escape a string for ffmpeg drawtext (colons, quotes, backslashes, %)."""
-    return (text.replace("\\", "\\\\").replace(":", r"\:")
-            .replace("'", r"\'").replace("%", r"\%"))
+def title_filter(textfile: str, font: str = DEFAULT_FONT, fontsize: int = 56) -> str:
+    """Top hook-title banner (whole clip). `textfile` is a path ffmpeg reads."""
+    return (f"drawtext=fontfile='{font}':textfile='{textfile}':fontcolor=white:"
+            f"fontsize={fontsize}:box=1:boxcolor=black@0.55:boxborderw=18:"
+            f"x=(w-text_w)/2:y=90")
 
 
-def title_filter(text: str, font: str = DEFAULT_FONT, fontsize: int = 56) -> str:
-    """Top hook-title banner, shown for the whole clip."""
-    t = escape_drawtext(text)
-    return (f"drawtext=fontfile='{font}':text='{t}':fontcolor=white:fontsize={fontsize}:"
-            f"box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y=90:line_spacing=8")
-
-
-def cta_filter(text: str, start: float, end: float, font: str = DEFAULT_FONT,
+def cta_filter(textfile: str, start: float, end: float, font: str = DEFAULT_FONT,
                fontsize: int = 48) -> str:
     """Timed bottom CTA banner (e.g. 'Subscribe for more'), shown start→end."""
-    t = escape_drawtext(text)
-    return (f"drawtext=fontfile='{font}':text='{t}':fontcolor=black:fontsize={fontsize}:"
-            f"box=1:boxcolor=yellow@0.95:boxborderw=20:x=(w-text_w)/2:"
-            f"y=h-text_h-160:enable='between(t,{start},{end})'")
+    return (f"drawtext=fontfile='{font}':textfile='{textfile}':fontcolor=black:"
+            f"fontsize={fontsize}:box=1:boxcolor=yellow@0.95:boxborderw=20:"
+            f"x=(w-text_w)/2:y=h-text_h-160:enable='between(t,{start},{end})'")
 
 
-def hook_cta_vf(title: str | None, cta: str | None, cta_window: tuple[float, float],
-                font: str = DEFAULT_FONT) -> str:
+def hook_cta_vf(title_file: str | None, cta_file: str | None,
+                cta_window: tuple[float, float], font: str = DEFAULT_FONT) -> str:
     """Compose the title + CTA drawtext chain into one -vf string."""
     parts: list[str] = []
-    if title:
-        parts.append(title_filter(title, font))
-    if cta:
-        parts.append(cta_filter(cta, cta_window[0], cta_window[1], font))
+    if title_file:
+        parts.append(title_filter(title_file, font))
+    if cta_file:
+        parts.append(cta_filter(cta_file, cta_window[0], cta_window[1], font))
     return ",".join(parts)
 
 
@@ -69,19 +66,29 @@ def vstack_cmd(clip: Path, gameplay: Path, out: Path,
 
 # ── thin executors ───────────────────────────────────────────────────────────
 
-def _run(cmd: list[str], what: str) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+def _run(cmd: list[str], what: str, cwd: Path | None = None) -> None:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=cwd)
     if proc.returncode != 0:
         raise RuntimeError(f"{what} failed: {proc.stderr.strip()[-400:]}")
 
 
 def apply_overlay(video: Path, out: Path, title: str | None = None, cta: str | None = None,
                   cta_window: tuple[float, float] = (2.0, 7.0), font: str = DEFAULT_FONT) -> Path:
-    vf = hook_cta_vf(title, cta, cta_window, font)
+    """Burn a hook title + CTA banner. Text is written to files next to `out` and
+    referenced via textfile= (escaping-proof). Runs ffmpeg with cwd=out.parent."""
+    workdir = out.parent
+    title_file = cta_file = None
+    if title:
+        (workdir / "title.txt").write_text(title)
+        title_file = "title.txt"
+    if cta:
+        (workdir / "cta.txt").write_text(cta)
+        cta_file = "cta.txt"
+    vf = hook_cta_vf(title_file, cta_file, cta_window, font)
     if not vf:
         return video
     _run(["ffmpeg", "-y", "-i", str(video), "-vf", vf, "-c:v", "libx264",
-          "-c:a", "copy", "-preset", "veryfast", str(out)], "overlay")
+          "-c:a", "copy", "-preset", "veryfast", str(out)], "overlay", cwd=workdir)
     return out
 
 

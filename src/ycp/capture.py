@@ -78,23 +78,30 @@ def import_whop_csv(csv_path: str | Path, db_path: Path | None = None) -> int:
             f"CSV needs a payout column and a clip_id or url column. Saw: {cols}"
         )
 
-    # Map posted URLs -> clip_id so URL-keyed CSVs resolve.
+    # Known clips + URL->id map, so we only attribute payouts to real clips
+    # (skip unknown rows instead of hitting a foreign-key error).
     with connect(db_path) as conn:
-        url_map = {row["post_url"]: row["clip_id"]
-                   for row in conn.execute(
-                       "SELECT clip_id, post_url FROM clips WHERE post_url IS NOT NULL")}
+        rows = conn.execute("SELECT clip_id, post_url FROM clips").fetchall()
+    known = {r["clip_id"] for r in rows}
+    url_map = {r["post_url"]: r["clip_id"] for r in rows if r["post_url"]}
 
-    n = 0
+    n = skipped = 0
     for _, row in df.iterrows():
-        clip_id = str(row[id_col]).strip() if id_col else url_map.get(str(row[url_col]).strip())
-        if not clip_id:
+        if id_col:
+            clip_id = str(row[id_col]).strip() if pd.notna(row[id_col]) else None
+        else:
+            clip_id = url_map.get(str(row[url_col]).strip()) if pd.notna(row[url_col]) else None
+        if not clip_id or clip_id not in known:
+            skipped += 1
             continue
-        payout = float(row[pay_col] or 0)
+        payout = float(row[pay_col]) if pd.notna(row[pay_col]) else 0.0
         metric = {"clip_id": clip_id, "whop_payout": payout}
-        if view_col and not pd.isna(row[view_col]):
+        if view_col and pd.notna(row[view_col]):
             metric["views"] = int(row[view_col])
         db.insert_metric(metric, db_path)
         n += 1
+    if skipped:
+        print(f"  · skipped {skipped} CSV row(s) with unknown/blank clip id")
     return n
 
 
