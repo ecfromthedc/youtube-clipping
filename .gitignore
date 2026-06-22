@@ -10,3 +10,5 @@ __pycache__/
 config/niches.yaml
 .DS_Store
 .claude/
+data/clips/
+data/*.md

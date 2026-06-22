@@ -7,6 +7,7 @@
   ycp qc-listen                 Stage 3: run the Slack reaction listener (blocks)
   ycp capture                   Stage 5: snapshot public views (+ --whop-csv FILE)
   ycp brief                     Stage 5: generate the weekly brief (+ --post-slack)
+  ycp clip <url>                Stage 2: hybrid yt-dlp+whisper+ffmpeg vertical clips
 """
 from __future__ import annotations
 
@@ -89,6 +90,24 @@ def _cmd_brief(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_clip(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from . import clip as clip_mod
+    created = clip_mod.run(args.url, max_clips=args.max, lane=args.lane,
+                           source_creator=args.creator, channel=args.channel,
+                           hook_cta=args.hook_cta, title=args.title, cta=args.cta,
+                           gameplay=Path(args.gameplay) if args.gameplay else None)
+    if not created:
+        print("✗ no clips produced (check the URL / yt-dlp / whisper output)")
+        return 1
+    print(f"✓ produced {len(created)} clips → data/clips/ (status: pending_qc)")
+    for c in created:
+        print(f"  · {c['clip_id']}  {c['len']}s  score {c['score']}  “{c['preview']}…”")
+    print("\nNext: `ycp qc-post` to send them to Slack for approval.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ycp", description="YouTube clipping closed-loop ops")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -103,6 +122,17 @@ def build_parser() -> argparse.ArgumentParser:
     br = sub.add_parser("brief", help="generate the weekly Double-Down Brief")
     br.add_argument("--post-slack", action="store_true", help="also post to the QC channel")
     br.set_defaults(fn=_cmd_brief)
+    cl = sub.add_parser("clip", help="hybrid pipeline: url -> vertical captioned clips")
+    cl.add_argument("url", help="source video URL (YouTube etc.)")
+    cl.add_argument("--max", type=int, default=6, help="max clips to produce (default 6)")
+    cl.add_argument("--lane", default="whop", choices=["whop", "owned"])
+    cl.add_argument("--creator", default="unknown", help="source creator label")
+    cl.add_argument("--channel", default="clips", help="target posting channel label")
+    cl.add_argument("--hook-cta", action="store_true", help="burn hook title + CTA banner")
+    cl.add_argument("--title", help="explicit hook title (else auto-picked from transcript)")
+    cl.add_argument("--cta", default="Subscribe for more", help="CTA banner text")
+    cl.add_argument("--gameplay", help="path to a gameplay loop to split-screen under clips")
+    cl.set_defaults(fn=_cmd_clip)
     return p
 
 

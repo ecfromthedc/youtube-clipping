@@ -10,11 +10,42 @@ The loop reads this first every cycle (see `GOAL-AND-LOOP.md`).
 | | Value | Notes |
 |---|---|---|
 | Path to $10K | **Whop-first**: ~6–10M views/mo @ ~$1.50/1K | Pure YouTube ad rev would need ~200M+ views/mo — not the play. |
-| Current operators live | 0 | System just built; no one running it yet. |
-| Biggest lever right now | **Operability** | Playbook seeded; needs a real operator to run it cold and expose gaps. |
-| Gap to close next | Finalize `config/niches.yaml` (creators + funded Whop campaigns) | Niche research landing; then one operator does a week-1 dry run. |
+| Current operators live | 0 | System built; no one running it yet. |
+| Biggest lever right now | **Account infra + niches** | Volume engine + Ssemble-parity now owned (cycles 1–2). Next gate is real channels + `niches.yaml`. |
+| Gap to close next | Finalize `config/niches.yaml` + face-tracking/translation cycles | Niche research pending; parity features 3–4 (face-track, translate) still to build. |
 
 ---
+
+## Cycle 2 — Ssemble parity: own the output (Hook/CTA + Gameplay)
+
+**Diagnosed lens:** dependency/ceiling — Eric flagged not wanting to depend on Ssemble.
+**Shipped (`src/ycp/enhance.py` + wired into `ycp clip`):**
+- **Hook Title & CTA** → ffmpeg `drawtext` top banner (title auto-picked from transcript)
+  + timed CTA banner. Replaces Ssemble's "Hook Title & CTA". `--hook-cta`.
+- **Game Video** → ffmpeg `vstack` of the clip over a looping gameplay file. Replaces
+  Ssemble's "Game Video". `--gameplay <path>`.
+- `SSEMBLE-PARITY.md` maps all 6 Ssemble features → owned local tools (yt-dlp/ffmpeg/
+  whisper/Ollama/OpenCV). Captioning + gameplay at parity now; face-track + translate next.
+**Evidence:** ruff clean · `pytest` 25 passed (6 new enhance builder tests: drawtext escape,
+title/cta filters, vstack command, title heuristic) · `ycp clip --help` shows all flags.
+**New bottleneck:** face tracking (OpenCV) + caption translation (Ollama) — parity cycles 3–4.
+
+## Cycle 1 — Hybrid clip pipeline (break the Ssemble credit ceiling)
+
+**Diagnosed lens:** THROUGHPUT — Ssemble's ~7 clips/day can't feed 75–100 posts/day.
+**Shipped (`src/ycp/clip.py`, `src/ycp/srt.py`, `ycp clip`):** yt-dlp download → Whisper
+transcribe → rank candidate moments by a hook heuristic → ffmpeg cut to 9:16 with burned
+captions → register as `pending_qc`. Free, local, uncapped. The volume engine.
+**Evidence:** ruff clean · `pytest` 25 passed (srt parse/slice/roundtrip, clip planning,
+scoring heuristic; ffmpeg reframe smoke deselected — sandbox ffmpeg hangs, validate on the
+real machine via `pytest -k cut_vertical`).
+**Hardening surfaced during verify (fixed):** spaced folder name ("Youtube Clipping Workflow")
+broke hatchling's *editable* install → switched to **non-editable install** + **CWD-based
+project-root resolution** (`config._find_root`) so config/data resolve from the repo, not
+site-packages. Added `scripts/setup.sh` (reproducible), `__main__.py` (`python -m ycp`), and
+pointed cron scripts at `.venv/bin/python -m ycp`. Also: a `kill -9` during a parallel install
+corrupted `config.py` mid-write — restored from git (git is the safety net; avoid `-9` during installs).
+**New bottleneck:** owning the *remaining* Ssemble features (→ cycle 2).
 
 ## Cycle 0 — Baseline (system built + verified)
 

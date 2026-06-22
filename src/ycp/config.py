@@ -13,7 +13,25 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[2]
+def _find_root() -> Path:
+    """Locate the project root (which holds config/ and data/).
+
+    Order: $YCP_HOME → nearest ancestor of CWD containing config/settings.yaml →
+    package-relative fallback. This decouples config/data from where the package
+    is installed, so a non-editable install (copied into site-packages) still
+    finds the real project files when run from the repo (operators + cron cd here).
+    """
+    env_home = os.getenv("YCP_HOME")
+    if env_home:
+        return Path(env_home)
+    cwd = Path.cwd()
+    for d in (cwd, *cwd.parents):
+        if (d / "config" / "settings.yaml").exists():
+            return d
+    return Path(__file__).resolve().parents[2]
+
+
+ROOT = _find_root()
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "clips.db"
 SETTINGS_PATH = ROOT / "config" / "settings.yaml"
