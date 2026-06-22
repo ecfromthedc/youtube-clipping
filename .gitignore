@@ -1,0 +1,12 @@
+.env
+data/*.db
+data/oauth/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+config/niches.yaml
+.DS_Store
+.claude/

@@ -1,0 +1,32 @@
+# Tunable knobs for the closed loop. No secrets here (those live in .env).
+
+sourcing:
+  # How many top videos to surface per source creator each day.
+  per_creator: 3
+  # Only consider source videos published within this many days.
+  lookback_days: 14
+  # Minimum view count for a source video to be queue-worthy.
+  min_views: 50000
+  # How many days of "fresh velocity" still counts as hot.
+  velocity_window_hours: 168  # 7 days
+
+scoring:
+  # Virality score weights (must sum to ~1.0). Tune from the weekly brief.
+  weights:
+    views_7d: 0.50        # log-normalized 7-day views
+    retention: 0.30       # average view percentage / retention
+    revenue_per_1k: 0.20  # blended $ per 1k (ad RPM + whop payout)
+  # Length buckets (seconds) for rollup analysis.
+  length_buckets: [0, 15, 25, 35, 45, 60]
+  # A combo must have at least this many clips before we trust its average.
+  min_sample: 4
+  # "Scale" = top quantile, "Kill" = bottom quantile, by mean score.
+  scale_quantile: 0.80
+  kill_quantile: 0.20
+
+brief:
+  # Top-N combos to feature in each section.
+  top_n: 5
+
+platforms: [youtube, tiktok, instagram]
+lanes: [whop, owned]   # whop = cash engine (permissioned), owned = YPP asset

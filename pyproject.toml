@@ -1,0 +1,37 @@
+[project]
+name = "youtube-clipping"
+version = "0.1.0"
+description = "Closed-loop YouTube Shorts clipping operation: source -> repurpose -> approve -> distribute -> measure -> double down."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "tabulate>=0.9",
+]
+
+[project.optional-dependencies]
+slack = ["slack-bolt>=1.18", "slack-sdk>=3.27"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+ycp = "ycp.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ycp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# This project lives under a home-level git repo whose ignore rules hide
+# ~/Projects; without this, ruff scans zero files and falsely "passes".
+respect-gitignore = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
