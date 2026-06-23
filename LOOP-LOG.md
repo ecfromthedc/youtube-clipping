@@ -9,7 +9,7 @@ The loop reads this first every cycle (see `GOAL-AND-LOOP.md`).
 
 | | Value | Notes |
 |---|---|---|
-| Path to $10K | **Whop-first**: ~6–10M views/mo @ ~$1.50/1K | Pure YouTube ad rev would need ~200M+ views/mo — not the play. |
+| Path to $10K | **Owned stack**: TikTok Creator Rewards + YPP + affiliate + brand deals across owned channels | Pure YouTube Shorts ad rev alone would need ~200M+ views/mo — the owned stack gets there at a fraction. |
 | Current operators live | 0 | System built; no one running it yet. |
 | Biggest lever right now | **Account infra + niches** | Volume engine + Ssemble-parity now owned (cycles 1–2). Next gate is real channels + `niches.yaml`. |
 | Gap to close next | Finalize `config/niches.yaml` + face-tracking/translation cycles | Niche research pending; parity features 3–4 (face-track, translate) still to build. |
@@ -52,7 +52,7 @@ corrupted `config.py` mid-write — restored from git (git is the safety net; av
 **What exists** (all in one repo root now: `~/Desktop/Development/Youtube Clipping Workflow/`):
 - Strategy + math: `YOUTUBE-CLIPPING-WORKFLOW.md`, `LAUNCH-CHECKLIST.md`
 - Live system: the `ycp` CLI with stages: `source` (yt-dlp ranked queue, no key needed) ·
-  `qc-post`/`qc-listen` (Slack approval) · `capture` (public views + Whop CSV import) ·
+  `qc-post`/`qc-listen` (Slack approval) · `capture` (public views) ·
   `brief` (deterministic Double-Down Brief).
 - Turnkey runbook: `OPERATOR-PLAYBOOK.md` (seeded v1).
 - Self-hardening engine: `GOAL-AND-LOOP.md`.
@@ -61,13 +61,13 @@ corrupted `config.py` mid-write — restored from git (git is the safety net; av
 - `ruff check src tests` → All checks passed.
 - `pytest` → 13 passed (scoring math, DB lifecycle, sourcing parser/ranker).
 - `ycp demo` → produced a correct brief: crowned `Flagrant·debate-moment·question` (score
-  97.6) as 🟢 Scale, killed `RandomVlogger·reaction·pattern-interrupt` (8.1), and showed
-  Whop $7,244 vs ad-rev $98.96 on identical clips — the core thesis, demonstrated in numbers.
+  97.6) as 🟢 Scale, killed `RandomVlogger·reaction·pattern-interrupt` (8.1), and reported
+  ad revenue by platform on identical clips — the closed loop, demonstrated in numbers.
 
 **Known gaps / failure modes not yet guarded (work for upcoming cycles):**
 1. `config/niches.yaml` not finalized — sourcing has no real creator list yet (research landing).
 2. Full analytics (retention/RPM/ad revenue) needs YouTube Analytics OAuth — stubbed honestly;
-   public views + Whop CSV cover the early loop.
+   public views cover the early loop.
 3. Slack QC needs a Slack app (bot+app tokens, Socket Mode) — code complete, creds not set.
 4. No real operator has run the playbook end-to-end — operability unproven against a human.
 5. Ssemble credit ceiling (~7/day) vs volume targets — hybrid pipeline documented, not yet
@@ -76,3 +76,19 @@ corrupted `config.py` mid-write — restored from git (git is the safety net; av
 
 **Next cycle target:** finalize `niches.yaml` from the niche research, then pick the single
 highest-leverage gap above (likely #1 or #4) and close it fully with verification.
+
+---
+
+## Cycle — 2026-06-23 · Captions + hook titles resurrected (self-contained)
+**What:** Built `src/ycp/captions.py` — opus-style word-by-word captions + the DeepSeek
+hook title, rendered with Pillow and composited via the ffmpeg `overlay` filter. Rewired
+`clip.py` (`cut_vertical` is now clean scale/crop; `run()` burns captions + title with a
+graceful plain-clip fallback). Added `tests/test_captions.py` + updated `tests/test_clip.py`.
+**Why:** This ffmpeg has no libass/freetype, so the old `subtitles=`/drawtext burn silently
+dropped EVERY caption + title — the single biggest quality gap (the hook is the #1 virality
+lever). Pillow→overlay sidesteps libass entirely and keeps the critical path local/owned.
+**Result:** 66 tests green, ruff clean. Real render verified (1080x1920, audio intact, title
++ word-highlight caption visible). DeepSeek hook agent verified live (typed candidates).
+Also: Whop fully scrubbed (pure owned-first); whisper.cpp + base.en installed.
+**Next bottleneck:** face-pan reframe (still dumb center-crop) → backlog #4. Then a standing
+real-YouTube end-to-end gate (#3) and the autopilot orchestrator (#6).
