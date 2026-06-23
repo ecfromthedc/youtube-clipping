@@ -64,7 +64,7 @@ climbing the scoreboard to $15,000/month.
   • Hooks → DeepSeek (strong model, key in 1Password → DEEPSEEK_API_KEY via `op read`; heuristic fallback).
 
 READ FIRST, EVERY CYCLE — repo root:
-  /Users/ecfromthedc/Desktop/Development/Youtube Clipping Workflow/
+  ~/Documents/Development/youtube-clipping/
 - HANDOFF.md            (the cold-start source of truth: state, strategic frame §3, build order §8, guardrails §10, open questions §9)
 - AUTOPILOT-LOG.md      (what you've built + the current #1 autonomy bottleneck — your memory)
 - SCOREBOARD.md / run `.venv/bin/python -m ycp scoreboard`  (the game state — Day/Level toward $15K)
@@ -180,8 +180,8 @@ exit criteria are met:
 **Compact one-liner** (terse version):
 
 ```
-/loop One autopilot build cycle for the clipping op. Repo root: ~/Desktop/Development/"Youtube Clipping
-Workflow". Read HANDOFF.md (state/frame/§8 build order/§9 RESOLVED decisions/§10 guardrails) +
+/loop One autopilot build cycle for the clipping op. Repo root: ~/Documents/Development/youtube-clipping.
+Read HANDOFF.md (state/frame/§8 build order/§9 RESOLVED decisions/§10 guardrails) +
 AUTOPILOT-LOG.md + ycp scoreboard. Find the #1 thing blocking "the factory runs itself"; build the next
 §8 step that removes it (1: fix ycp source [flat→non-flat top-N: flat for IDs, then non-flat --print
 %(view_count)s;%(timestamp)s on top-N recent per creator], 2: orchestrator ycp autopilot, 3: distribution

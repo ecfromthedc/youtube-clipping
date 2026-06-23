@@ -98,7 +98,7 @@ def crop_x_expr(track: list[tuple[float, float]], scaled_w: int,
         return str(segs[0][1])
     expr = str(segs[-1][1])
     for end_t, x in reversed(segs[:-1]):
-        expr = f"if(lt(t\\,{end_t:.3f})\\,{x}\\,{expr})"
+        expr = f"if(lt(t,{end_t:.3f}),{x},{expr})"
     return expr
 
 
@@ -116,16 +116,17 @@ def reframe(video: Path, out_path: Path, workdir: Path, *, mode: str = "face",
         # is a graphic / b-roll / turned-away shot and the safe center crop is better.
         if sampled and len(track) >= 0.45 * sampled:
             expr = crop_x_expr(track, scaled_w, crop_w=w)
-    if scaled_w <= w or expr is None:
-        vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
-    else:
-        vf = f"scale=-2:{h},crop={w}:{h}:x='{expr}':y=0"
+    center_vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    face_vf = None if (scaled_w <= w or expr is None) else f"scale=-2:{h},crop={w}:{h}:x='{expr}':y=0"
     tmp = workdir / "reframed.mp4"
-    cmd = ["ffmpeg", "-y", "-i", str(video), "-vf", vf, "-c:v", "libx264",
-           "-c:a", "copy", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(tmp)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if proc.returncode != 0 or not tmp.exists():
-        raise RuntimeError(f"reframe failed: {proc.stderr.strip()[-400:]}")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(tmp), str(out_path))
-    return out_path
+    last_err = ""
+    for vf in ([face_vf, center_vf] if face_vf else [center_vf]):
+        cmd = ["ffmpeg", "-y", "-i", str(video), "-vf", vf, "-c:v", "libx264",
+               "-c:a", "copy", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(tmp)]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if proc.returncode == 0 and tmp.exists():
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(tmp), str(out_path))
+            return out_path
+        last_err = proc.stderr.strip()[-400:]
+    raise RuntimeError(f"reframe failed: {last_err}")

@@ -1,9 +1,9 @@
-# Goal + Optimization Loop — "Any operator clears $10K/month"
+# Goal + Optimization Loop — "Any operator clears $15K/month"
 
 This is the self-hardening engine for the clipping operation. The **Goal** is the
 north star. The **Loop Prompt** is what you paste into `/loop` so Claude keeps
 making the system more robust, more optimized, and more idiot-proof every cycle —
-until any team member can run the play from the playbook alone and clear $10K/mo.
+until any team member can run the play from the playbook alone and clear $15K/mo.
 
 ---
 
@@ -11,14 +11,14 @@ until any team member can run the play from the playbook alone and clear $10K/mo
 
 > **Make the YouTube clipping operation robust and turnkey enough that ANY Rising
 > Tides team member — with no special skill and no hand-holding — can follow
-> `OPERATOR-PLAYBOOK.md` cold and clear $10,000+/month net within 90 days, and
+> `OPERATOR-PLAYBOOK.md` cold and clear $15,000+/month net within 90 days, and
 > sustain it, without ever tripping a ban or copyright strike.**
 
 **Done when ALL of these hold (the loop's exit criteria):**
 1. **Runnable cold** — a brand-new operator runs sourcing → repurpose → QC → distribute → measure end-to-end from the playbook with zero outside questions.
 2. **Every failure mode guarded** — account flag, music Content-ID, Ssemble credit cap, dead clip: each has a documented guardrail or recovery step.
 3. **The loop actually compounds** — the weekly Double-Down Brief demonstrably steers sourcing, and output + hit-rate rise week over week.
-4. **Economics pencil out** — a worked scorecard shows a credible path to $10K/operator/month (volume × hit-rate × rate), with at least one real example.
+4. **Economics pencil out** — a worked scorecard shows a credible path to $15K/operator/month (volume × hit-rate × rate), with at least one real example.
 5. **System is green** — all `ycp` commands run clean and tests pass.
 
 **Hard constraints (never optimize past these):** transformation on every owned-channel clip · clip-friendly / permissioned sources preferred · residential IPs + warmed accounts · no copyrighted music · **channel health > raw output**.
@@ -29,25 +29,25 @@ until any team member can run the play from the playbook alone and clear $10K/mo
 
 ```
 You are hardening and optimizing the Rising Tides YouTube clipping operation so ANY
-team member can run it from the playbook alone and clear $10,000+/month net. Run ONE
+team member can run it from the playbook alone and clear $15,000+/month net. Run ONE
 improvement cycle, fully and verified.
 
 NORTH STAR: a brand-new operator, no special skill, follows OPERATOR-PLAYBOOK.md cold
-and reaches $10K+/month within 90 days — sustainably, inside the compliance guardrails.
+and reaches $15K+/month within 90 days — sustainably, inside the compliance guardrails.
 
 INPUTS — everything is in this one repo root:
-  /Users/ecfromthedc/Desktop/Development/Youtube Clipping Workflow/
+  ~/Documents/Development/youtube-clipping/
 Read these first, every cycle:
 - LOOP-LOG.md          (what's done + current top bottleneck)
 - OPERATOR-PLAYBOOK.md (the turnkey runbook you maintain)
-- YOUTUBE-CLIPPING-WORKFLOW.md, LAUNCH-CHECKLIST.md (strategy + the $10K math)
+- YOUTUBE-CLIPPING-WORKFLOW.md, LAUNCH-CHECKLIST.md (strategy + the $15K math)
 - src/ + tests/ + config/ + data/latest-brief.md (the `ycp` system and its output)
 If LOOP-LOG.md or OPERATOR-PLAYBOOK.md don't exist yet, creating them is your first cycle.
 
 EACH CYCLE, DO EXACTLY THIS:
 
 1) ORIENT — read the inputs. State in one line what the current single biggest thing
-   blocking "any operator clears $10K/month" is.
+   blocking "any operator clears $15K/month" is.
 
 2) DIAGNOSE — scan these six lenses and pick the ONE most-binding gap right now:
    • THROUGHPUT  — is the pipeline hitting target posts/day (ramp 15→45→75→100+)?
@@ -63,7 +63,7 @@ EACH CYCLE, DO EXACTLY THIS:
    • OPERABILITY — could a first-day hire do this step from the playbook with zero
                    questions? Turn every judgment call (which campaign, which clip,
                    which format) into a checklist or a number pulled from the data.
-   • ECONOMICS   — is each operator's actual $/month measured and on the $10K curve?
+   • ECONOMICS   — is each operator's actual $/month measured and on the $15K curve?
                    Name the exact gap (volume? hit-rate? rate? pool timing?) and the lever
                    that closes it.
 
@@ -80,7 +80,7 @@ EACH CYCLE, DO EXACTLY THIS:
    say so and treat it as not done.
 
 5) LOG & COMPOUND — append a dated entry to LOOP-LOG.md: what changed, why, the evidence it
-   works, and the NEW top bottleneck. Update the operator scorecard (target $10K/operator/mo:
+   works, and the NEW top bottleneck. Update the operator scorecard (target $15K/operator/mo:
    current estimate, the gap, the next lever).
 
 6) DECIDE — if ALL exit criteria below hold, output "OPERATION IS TURNKEY — entering
@@ -90,7 +90,7 @@ EXIT CRITERIA (all must hold):
   ✓ New operator runs the full pipeline from OPERATOR-PLAYBOOK.md with zero outside questions.
   ✓ Every known failure mode has a documented guardrail or recovery step.
   ✓ The Double-Down Brief is measurably driving sourcing; output + hit-rate rise weekly.
-  ✓ A worked scorecard shows a credible path to $10K/operator/month with ≥1 real example.
+  ✓ A worked scorecard shows a credible path to $15K/operator/month with ≥1 real example.
   ✓ All `ycp` commands run clean; tests pass.
 
 RULES: compliance guardrails are non-negotiable (transformation on owned clips, clip-friendly
@@ -123,13 +123,13 @@ optimizing on each fresh Double-Down Brief (run it Monday after the brief drops)
 **Compact one-liner** (if you want a terse version):
 
 ```
-/loop One robustness+optimization cycle on the clipping op so any operator clears $10K/mo.
-Repo root: ~/Desktop/Development/"Youtube Clipping Workflow". Read LOOP-LOG.md +
+/loop One robustness+optimization cycle on the clipping op so any operator clears $15K/mo.
+Repo root: ~/Documents/Development/youtube-clipping. Read LOOP-LOG.md +
 OPERATOR-PLAYBOOK.md + the ycp system there; find the #1
 gap (throughput / hit-rate / monetization / account-health / operability / economics); fix
 ONE thing fully; verify it (run tests/ycp/the math); log it + the new bottleneck; respect
 compliance guardrails; stop only when a first-day hire can run it end-to-end and the
-economics show a real path to $10K/operator. One verified improvement per cycle.
+economics show a real path to $15K/operator. One verified improvement per cycle.
 ```
 
 ---
@@ -139,6 +139,6 @@ economics show a real path to $10K/operator. One verified improvement per cycle.
 | File | Role |
 |---|---|
 | `OPERATOR-PLAYBOOK.md` | The turnkey runbook a new hire follows cold. The loop's main deliverable — it gets sharper every cycle. |
-| `LOOP-LOG.md` | Append-only cycle log: what changed, evidence, current #1 bottleneck, and the $10K/operator scorecard. The loop's memory. |
+| `LOOP-LOG.md` | Append-only cycle log: what changed, evidence, current #1 bottleneck, and the $15K/operator scorecard. The loop's memory. |
 
 Inputs it reads but doesn't own: the strategy docs (`YOUTUBE-CLIPPING-WORKFLOW.md`, `LAUNCH-CHECKLIST.md`) and the live `ycp` system + weekly brief — all in this same repo root.

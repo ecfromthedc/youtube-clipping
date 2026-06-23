@@ -40,14 +40,18 @@ The research answers **what to clip and which angles to run**. You take it from 
 - **Gamified scoreboard** — `ycp scoreboard` turns the closed-loop DB into a "Race to $15K"
   game (`src/ycp/scoreboard.py`, `SCOREBOARD.md`, tests pass). Run `ycp scoreboard --demo` to see
   mid-game; plain `ycp scoreboard` shows the real Day-0 state.
-- The full `ycp` pipeline skeleton: `source · clip · qc · capture · brief · demo · scoreboard`.
+- **`ycp source` works** — the empty-queue bug is **fixed** (`sourcing.py`: flat mode for IDs →
+  non-flat `--print` for real `view_count`/`timestamp` on the top-N per creator). Writes a
+  non-empty `data/source-queue.md`.
+- **Autopilot orchestrator built** — `ycp autopilot` chains `source → clip → qc → capture →
+  brief → scoreboard` (flags `--skip-source` / `--no-clip`); `scripts/autopilot.sh` + the
+  launchd plist wrap it for cron.
+- The full `ycp` pipeline skeleton: `source · clip · qc · capture · brief · demo · scoreboard · autopilot`.
 
 ### ❌ Not built yet (your work)
-- **Autopilot orchestrator** — nothing chains the daily loop on a schedule yet (see §8).
 - **Distribution** — posting to YouTube/TikTok/IG is NOT wired. Target = **Repurpose.io** (§9
   resolved; Eric is trialing it). **A human must connect accounts once** in its dashboard.
 - **Live channels** — zero channels exist yet. Game state = **Day 0, Level 1 "Boot Up", $0.**
-- **The sourcing bug** (see §8, #1) — `ycp source` returns an empty queue until fixed.
 
 ---
 
@@ -110,17 +114,19 @@ youtube-clipping`) or the `ycp` command won't see your change.** Tests run again
 pyproject `pythonpath`, so `pytest` reflects edits without reinstall.
 
 ```bash
-cd ~/Desktop/Development/"Youtube Clipping Workflow"
+cd ~/Documents/Development/youtube-clipping
 .venv/bin/python -m ycp demo          # seed demo data + print a Double-Down Brief (no creds)
 .venv/bin/python -m ycp scoreboard --demo   # see the game mid-run (Level 5, $7.3K/mo)
 .venv/bin/python -m ycp scoreboard    # the REAL Day-0 state ($0, Level 1)
-.venv/bin/python -m ycp source        # ⚠ Stage 1 — currently returns EMPTY (see §8 #1)
+.venv/bin/python -m ycp source        # Stage 1 — writes a non-empty ranked queue (~2–3 min, live yt-dlp)
 .venv/bin/python -m ycp clip <url>    # Stage 2 — hybrid yt-dlp+whisper+ffmpeg vertical clips
+.venv/bin/python -m ycp autopilot --skip-source --no-clip   # chain all stages end-to-end (7/7)
 ```
 
-**Verify before claiming anything done:** `ruff check src tests` (clean) · `pytest tests/test_scoreboard.py tests/test_scoring.py tests/test_db.py tests/test_sourcing.py -q` (18 pass).
-⚠ A plain `pytest` **hangs** on an ffmpeg smoke test in the sandbox — run the named subset, or
-exclude `-k "not cut_vertical"`. Validate ffmpeg paths on the real machine.
+**Verify before claiming anything done:** `ruff check src tests` (clean) · `pytest -q` (**72 pass,
+~1s** on a real machine with ffmpeg). The `cut_vertical` ffmpeg smoke is auto-skipped when ffmpeg
+is absent; it only *hung* under the agent sandbox — on a real Mac plain `pytest` runs it fine
+(use `-k "not cut_vertical"` only if you're in a sandbox).
 
 **The closed loop (the DB is the single source of truth):**
 `source → clip → qc (Slack ✅/❌) → distribute → capture (views/$) → brief (scale/kill) → scoreboard → re-source to the brief.`
@@ -144,19 +150,14 @@ exclude `-k "not cut_vertical"`. Validate ffmpeg paths on the real machine.
 > **This roadmap is driven by `AUTOPILOT-GOAL-AND-LOOP.md`.** Paste its loop prompt into `/loop` to
 > execute these steps autonomously — one verified build per cycle — until the factory runs itself.
 
-Do these roughly in order. 1 + 2 are fully in your control; 3 needs Eric's accounts once.
+Do these roughly in order. **#1 + #2 are done (✅ below) — your live work starts at #3**, which
+needs Eric's accounts connected once.
 
-1. **Fix `ycp source` (unblocks everything).** `sourcing._ytdlp_json` uses `yt-dlp
-   --flat-playlist`, which now returns `view_count: None` for channel `/videos` tabs → `rank()`
-   drops everything at `min_views`. **Proven fix:** non-flat `--print` extraction
-   (`%(view_count)s;%(timestamp)s;...`) on the top-N recent per creator. Don't rip out flat mode
-   wholesale (it's fast/no-key) — pattern: *flat for IDs → non-flat on the top-N candidates.*
-   Keep `parse_entries`/`rank` as-is (they already read `view_count`/`timestamp`). There's a
-   spawned task for this (id `task_f81d84f1`). Verify: `ycp source` writes a non-empty
-   `data/source-queue.md`; `pytest` + `ruff` stay green.
-2. **The orchestrator.** One command / cron (`scripts/autopilot.sh` or `ycp autopilot`) that
-   chains `source → clip → score → qc-post → capture → brief → scoreboard`. `scripts/daily.sh`
-   + `weekly.sh` exist as starting points.
+1. ~~**Fix `ycp source`**~~ ✅ **DONE.** The empty-queue bug is fixed — `sourcing.py` uses flat
+   mode for IDs → non-flat `--print` (`%(view_count)s`/`%(timestamp)s`) on the top-N recent per
+   creator. `ycp source` now writes a non-empty `data/source-queue.md`; `pytest` + `ruff` green.
+2. ~~**The orchestrator**~~ ✅ **DONE.** `ycp autopilot` (and `scripts/autopilot.sh` + the
+   launchd plist) chains `source → clip → qc → capture → brief → scoreboard` end-to-end.
 3. **Wire distribution → Repurpose.io** (§9 resolved). Build a thin, swappable adapter to its
    watch-folder / cloud-trigger model: the `distribute` stage drops each approved clip + metadata
    into the watched source and Repurpose auto-posts to the connected channels. **Eric connects
@@ -222,7 +223,7 @@ All four §9 decisions are made. Build to these; do **not** re-ask.
 3. Run `.venv/bin/python -m ycp demo` — see the closed loop produce a Double-Down Brief.
 4. Skim `src/ycp/sourcing.py` + `scoreboard.py` + `brief.py` to learn the system's shape.
 5. Confirm the §9 open questions with Eric.
-6. Start **autopilot roadmap #1** (the `ycp source` fix) — it unblocks the live queue, then build
-   the orchestrator (#2).
+6. Start at **autopilot roadmap #3** (wire distribution → Repurpose.io) — #1 (source fix) and #2
+   (orchestrator) are already done. Then launch Hot Seat + Money Fights (#4).
 
 > Welcome aboard. The research is solid and the game is set — now make the engine run itself. 🏁

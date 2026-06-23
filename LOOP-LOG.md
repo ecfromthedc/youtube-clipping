@@ -1,15 +1,15 @@
-# Loop Log — optimization toward "any operator clears $10K/month"
+# Loop Log — optimization toward "any operator clears $15K/month"
 
 Append-only. Newest cycle on top. Each entry: what changed · evidence · new bottleneck.
 The loop reads this first every cycle (see `GOAL-AND-LOOP.md`).
 
 ---
 
-## 📊 Operator economics scorecard (target: $10K/operator/month)
+## 📊 Operator economics scorecard (target: $15K/operator/month — $10K is the "Cruise" milestone)
 
 | | Value | Notes |
 |---|---|---|
-| Path to $10K | **Owned stack**: TikTok Creator Rewards + YPP + affiliate + brand deals across owned channels | Pure YouTube Shorts ad rev alone would need ~200M+ views/mo — the owned stack gets there at a fraction. |
+| Path to $15K | **Owned stack**: TikTok Creator Rewards + YPP + affiliate + brand deals across owned channels | Pure YouTube Shorts ad rev alone would need ~300–500M views/mo — the owned stack gets there at a fraction. |
 | Current operators live | 0 | System built; no one running it yet. |
 | Biggest lever right now | **Account infra + niches** | Volume engine + Ssemble-parity now owned (cycles 1–2). Next gate is real channels + `niches.yaml`. |
 | Gap to close next | Finalize `config/niches.yaml` + face-tracking/translation cycles | Niche research pending; parity features 3–4 (face-track, translate) still to build. |

@@ -70,7 +70,7 @@ agitation angle — each with a thesis, proof of demand, and a go/no-go test, so
 the channels most likely to clear $15K/month on the closed-loop pipeline.
 
 INPUTS — everything is in this one repo root:
-  /Users/ecfromthedc/Desktop/Development/Youtube Clipping Workflow/
+  ~/Documents/Development/youtube-clipping/
 Read these first, every cycle:
 - RESEARCH-LOG.md         (what's been discovered/scored + the current top discovery gap)
 - SOURCE-INTELLIGENCE.md  (the ranked, scored source-page list you maintain)
@@ -173,8 +173,8 @@ after the brief drops):
 **Compact one-liner** (terse version):
 
 ```
-/loop One discovery cycle for the clipping op. Repo root: ~/Desktop/Development/"Youtube Clipping
-Workflow". Read RESEARCH-LOG.md + SOURCE-INTELLIGENCE.md + CHANNEL-CONCEPTS.md + data/latest-brief.md.
+/loop One discovery cycle for the clipping op. Repo root: ~/Documents/Development/youtube-clipping.
+Read RESEARCH-LOG.md + SOURCE-INTELLIGENCE.md + CHANNEL-CONCEPTS.md + data/latest-brief.md.
 Find the weakest front (sources / live campaigns / angles incl. debate-bait); expand it with REAL
 yt-dlp velocity + web research; score candidates on the ROS rubric; keep 3–5 testable channel
 concepts (≥1 agitation angle, inside policy); validate the top bet with real evidence; promote

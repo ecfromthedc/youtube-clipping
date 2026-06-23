@@ -1,4 +1,4 @@
-# Operator Playbook — run the clipping play, clear $10K/month
+# Operator Playbook — run the clipping play, clear $15K/month
 
 **Who this is for:** anyone on the team running clipping. No special skill required.
 Follow it top to bottom. If a step makes you ask a question, that's a bug — flag it
@@ -13,11 +13,12 @@ automatable, sellable asset.** _(Whop cut 2026-06; pure owned-first.)_
 
 ---
 
-## 0. Your $10K/month scorecard (know your numbers)
+## 0. Your scorecard — the ramp to $15K (know your numbers)
 
-You hit $10K when **views × rate** clears it. On the owned monetization stack (TikTok Creator
-Rewards + YPP + affiliate + brand deals), the target is reachable at a fraction of the 200M+
-views/month that pure YouTube Shorts ad revenue alone would need.
+Income = **views × rate**. The table below is your first-90-days ramp to ~$10K/mo (the **"Cruise"**
+milestone on the scoreboard); **$15K is the goal** as the owned stack matures. On the owned
+monetization stack (TikTok Creator Rewards + YPP + affiliate + brand deals), it's reachable at a
+fraction of the 300M+ views/month that pure YouTube Shorts ad revenue alone would need.
 
 | Lever | Month 1 target | Month 2 | Month 3 (≈$10K) |
 |---|---|---|---|
@@ -35,7 +36,7 @@ monetization (more funded campaigns, submitted in-window). Fix that one thing.
 
 ## 1. Your daily routine (≈90 min, then the system runs)
 
-1. **Pull the queue** — `cd ~/Desktop/Development/"Youtube Clipping Workflow" && ./scripts/daily.sh`
+1. **Pull the queue** — `cd ~/Documents/Development/youtube-clipping && ./scripts/daily.sh`
    (or `uv run ycp source`). Open `data/source-queue.md` — these are today's highest-
    velocity videos to clip, ranked. Work top-down.
 2. **Clip** — run each source video through Ssemble AI clipping (or the hybrid pipeline,
@@ -104,7 +105,7 @@ you own every channel, so the income compounds instead of evaporating when a cam
 clip, keep music clean, warm accounts on residential IPs — protect the asset above raw output.
 
 **Realistic ramp:** ~$50–200 (mo 1, TikTok Rewards + early affiliate) → $300–1,000+ (mo 3) per
-operator, with YPP + brand deals stacking on top toward $10K as the channels mature.
+operator, with YPP + brand deals stacking on top toward $15K as the channels mature ($10K is the "Cruise" milestone en route).
 
 ---
 
