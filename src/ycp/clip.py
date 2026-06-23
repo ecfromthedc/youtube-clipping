@@ -93,13 +93,20 @@ def _window_text(segments: list[Segment], start: float, end: float) -> str:
 
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
-def download(url: str, workdir: Path) -> Path:
+def download(url: str, workdir: Path, window_sec: int | None = None) -> Path:
     out = workdir / "source.mp4"
-    cmd = ["yt-dlp", "-f", "mp4/best", "-o", str(out), url]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    if proc.returncode != 0 or not out.exists():
-        raise RuntimeError(f"download failed: {proc.stderr.strip()[:300]}")
-    return out
+    cmd = ["yt-dlp", "-f", "mp4/best", "-o", str(out)]
+    if window_sec:
+        # Bound long sources (podcasts): grab only the first window_sec seconds.
+        cmd += ["--download-sections", f"*0-{int(window_sec)}", "--force-keyframes-at-cuts"]
+    cmd.append(url)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    if out.exists():
+        return out
+    cands = list(workdir.glob("source*.mp4")) + list(workdir.glob("source*.mkv"))
+    if cands:
+        return cands[0]
+    raise RuntimeError(f"download failed: {proc.stderr.strip()[:300]}")
 
 
 # transcribe() now lives in transcribe.py (whisper.cpp default, openai-whisper fallback)
@@ -123,7 +130,8 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
         source_creator: str = "unknown", channel: str = "clips",
         hook_cta: bool = True, title: str | None = None, cta: str = "Subscribe for more",
         gameplay: Path | None = None, source_video_id: str | None = None,
-        angle: str = "", db_path: Path | None = None) -> list[dict]:
+        angle: str = "", window_sec: int | None = None,
+        db_path: Path | None = None) -> list[dict]:
     """Full pipeline: url -> ranked vertical clips with hook title + captions, registered for QC.
 
     Every clip gets the DeepSeek hook title (the highest-leverage lever) and opus-style
@@ -136,7 +144,7 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
     vid_hash = hashlib.sha1(url.encode()).hexdigest()[:8]
     with tempfile.TemporaryDirectory(prefix="ycp-clip-") as tmp:
         workdir = Path(tmp)
-        video = download(url, workdir)
+        video = download(url, workdir, window_sec=window_sec)
         segments = transcribe(video, workdir)
         moments = vision.rank_moments(video, n=max_clips) if vision.enabled() else []
         if moments:
