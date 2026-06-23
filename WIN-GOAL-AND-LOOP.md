@@ -60,7 +60,14 @@ Each cycle:
        the output (vertical 1080x1920, hook title + captions burned, audio intact).
 4. Log the cycle to LOOP-LOG.md: what / why / result / the next bottleneck you see. Update
    SCOREBOARD.md if state changed.
-5. Stop. Surface to Eric anything that needs his accounts or a decision (channel connect,
+5. Commit — CLEANLY (Eric may be editing this repo live in another session):
+     - Stage ONLY the files you changed this cycle, by explicit path: `git add path/a path/b`.
+       NEVER `git add -A`, `git add .`, or `git commit -am` — a blanket add sweeps his
+       in-progress edits into your commit under the wrong message (this has happened).
+     - First run `git status --porcelain`; if it lists files you did NOT touch this cycle,
+       leave them unstaged — don't commit, stash, or `git checkout` them.
+     - One conventional commit scoped to your change, then `git push`.
+6. Stop. Surface to Eric anything that needs his accounts or a decision (channel connect,
    Repurpose auth, flipping QC manual->auto).
 
 Non-negotiable constraints:

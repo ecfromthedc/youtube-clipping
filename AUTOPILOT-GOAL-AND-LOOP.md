@@ -132,6 +132,11 @@ EACH CYCLE, DO EXACTLY THIS:
 6) LOG & COMPOUND — append a dated entry to AUTOPILOT-LOG.md: what shipped, the evidence it works, the
    remaining human-touch count, and the NEW #1 autonomy bottleneck. Re-run `ycp scoreboard` and note
    the game state (Day / Level / $).
+   Then COMMIT CLEANLY: stage ONLY the paths you changed this cycle, by explicit name
+   (`git add path/a path/b`) — NEVER `git add -A` / `git add .` / `git commit -am`, since Eric may be
+   editing this repo live and a blanket add bundles his work into your commit under the wrong message
+   (this has happened). If `git status --porcelain` shows files you didn't touch, leave them unstaged.
+   One conventional commit scoped to your change, then push.
 
 7) ESCALATE — the §9 questions are RESOLVED (don't re-ask). Escalate ONLY a one-time human action
    (connect accounts in Repurpose.io, create/auth a channel) or a genuinely new decision not covered
