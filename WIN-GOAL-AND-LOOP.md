@@ -25,6 +25,7 @@ Rewards + affiliate + later brand deals). The channels are the asset.
   render on every clip — drawn with **Pillow** and composited via the ffmpeg **`overlay`**
   filter (this ffmpeg has no libass/freetype). **Self-contained, no network on the critical
   path.** Proven on a real render. The caption-less era is over.
+- **Gemini 3.5 vision moment-selection (this session):** Gemini watches the source video and picks the most clippable windows — replacing the blind transcript heuristic. On by default (`gemini-3.5-flash`), heuristic fallback if the key's missing. Live-verified A/B.
 - **Not live yet:** zero channels. Distribution (Repurpose.io) + channel accounts need
   Eric's **one-time connect**. Game state: **Day 0, Level 1, $0.**
 

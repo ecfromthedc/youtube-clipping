@@ -65,3 +65,11 @@ distribution:
 
 platforms: [youtube, tiktok, instagram]
 lanes: [owned]   # owned = YPP asset (Whop cut 2026-06; pure owned-first)
+
+# --- Vision moment selector (Gemini) -----------------------------------------
+# Gemini watches the source video and picks the most clippable windows, replacing the
+# blind transcript heuristic. Needs GEMINI_API_KEY in .env. Falls back to the heuristic
+# whenever the key is missing or this is off — the pipeline never hard-breaks.
+vision:
+  enabled: true
+  model: gemini-3.5-flash

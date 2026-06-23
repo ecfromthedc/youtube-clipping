@@ -21,12 +21,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import captions, db, enhance, hooks
+from . import captions, db, enhance, hooks, vision
 from .config import ROOT
 from .srt import Segment, slice_and_shift
 from .transcribe import transcribe
 
 CLIPS_DIR = ROOT / "data" / "clips"
+MAX_CLIP_SEC = 45.0  # hard cap on a clip window (Gemini sometimes returns longer)
 HOOK_WORDS = {"why", "how", "never", "secret", "nobody", "actually", "truth",
               "mistake", "stop", "biggest", "worst", "best", "everyone", "wrong"}
 
@@ -85,6 +86,11 @@ def plan_clips(segments: list[Segment], min_len: float = 15, max_len: float = 60
     return ranked[:top] if top else ranked
 
 
+def _window_text(segments: list[Segment], start: float, end: float) -> str:
+    """Transcript text overlapping [start, end] — the hook + caption source for a window."""
+    return " ".join(s.text for s in segments if s.end > start and s.start < end).strip()
+
+
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
 def download(url: str, workdir: Path) -> Path:
@@ -137,7 +143,15 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
         workdir = Path(tmp)
         video = download(url, workdir)
         segments = transcribe(video, workdir)
-        candidates = plan_clips(segments, top=max_clips)
+        moments = vision.rank_moments(video, n=max_clips) if vision.enabled() else []
+        if moments:
+            print(f"  · Gemini vision picked {len(moments)} moment(s)")
+            candidates = [Candidate(m.start, min(m.end, m.start + MAX_CLIP_SEC),
+                                    _window_text(segments, m.start,
+                                                 min(m.end, m.start + MAX_CLIP_SEC)),
+                                    m.score) for m in moments]
+        else:
+            candidates = plan_clips(segments, top=max_clips)
         for i, cand in enumerate(candidates):
             clip_id = f"{vid_hash}-{i:02d}"
             chunks = captions.build_chunks(slice_and_shift(segments, cand.start, cand.end))

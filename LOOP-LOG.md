@@ -92,3 +92,19 @@ lever). Pillow→overlay sidesteps libass entirely and keeps the critical path l
 Also: Whop fully scrubbed (pure owned-first); whisper.cpp + base.en installed.
 **Next bottleneck:** face-pan reframe (still dumb center-crop) → backlog #4. Then a standing
 real-YouTube end-to-end gate (#3) and the autopilot orchestrator (#6).
+
+---
+
+## Cycle — 2026-06-23 · Gemini vision moment-selection (the moment IS the clip)
+**What:** New `src/ycp/vision.py` — Gemini 3.5 Flash watches the source video and returns the N
+most clippable windows (start/end/score/reason). `clip.run` uses them in place of the blind
+transcript heuristic (windows clamped <=45s), with the heuristic as fallback when off / no key.
+Added `qc_screen()` for an optional visual-compliance pass. Wired `GEMINI_API_KEY` through
+`config.env` + a `vision:` block in settings (on by default), `google-genai` dep, test_vision.py.
+Also baked Slack into the flow: `slack_qc.post_pending` now uploads the real mp4 (files_upload_v2).
+**Why:** The heuristic counted `?`/hook-words in the transcript — blind to the footage. It grabbed
+the intro (0-58s); Gemini watched and picked the substantive "4 wealth-quadrants payoff" (49s+).
+Picking the right moment is the biggest virality lever; captions/reframe can't save a dull window.
+**Result:** 69 tests green, ruff clean. Live A/B on a real Hormozi source posted to #youtube-clipping.
+**Next bottleneck:** face-pan reframe (still center-crop); the Slack approve/reject loop needs the
+bot app's reactions:read/write scopes + a reaction_added event subscription.
