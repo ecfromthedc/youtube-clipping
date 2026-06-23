@@ -79,7 +79,7 @@ Read these first, every cycle:
 - config/niches.yaml + config/niches.example.yaml (where validated winners get promoted to)
 - data/latest-brief.md    (the live Double-Down Brief — REAL results once channels run; this is
                            what closes the loop and re-ranks everything)
-- YOUTUBE-CLIPPING-WORKFLOW.md (the two-lane model, the money math, the compliance guardrails)
+- YOUTUBE-CLIPPING-WORKFLOW.md (the owned-first model, the money math, the compliance guardrails)
 If RESEARCH-LOG.md / SOURCE-INTELLIGENCE.md / CHANNEL-CONCEPTS.md don't exist yet, creating them
 (with a real first batch, not stubs) is your first cycle.
 
