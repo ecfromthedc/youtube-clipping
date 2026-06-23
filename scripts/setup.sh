@@ -17,6 +17,10 @@ echo "→ installing dev tooling + package (non-editable)…"
 uv pip install pytest ruff           # dev tools
 uv pip install . --reinstall-package youtube-clipping   # copy ycp into site-packages
 
+echo "→ installing git hooks (commit-hygiene guard for concurrent agents)…"
+git config core.hooksPath .githooks
+chmod +x .githooks/* 2>/dev/null || true
+
 echo "✓ setup complete."
 echo "  smoke test:   .venv/bin/ycp demo"
 echo "  or:           .venv/bin/python -m ycp demo"

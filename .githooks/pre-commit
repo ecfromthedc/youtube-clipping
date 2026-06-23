@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Commit-hygiene guard for a multi-agent repo.
+#
+# Several /loop sessions edit and commit this repo concurrently. The failure mode this
+# prevents: a session runs `git add -A` (or `git commit -am`) and sweeps another session's
+# in-progress edits into one commit under the wrong message — typically a code change plus a
+# pile of unrelated strategy docs. (It happened once; see CLAUDE.md "Commit discipline".)
+#
+# Heuristic: block a commit that stages source code AND 3+ root-level *.md docs together —
+# the shape of an accidental sweep. Legit code+doc commits (one or two docs) pass untouched.
+# Stage by explicit path instead:  git add <your-files>
+#
+# Intentional mixed commit?  YCP_ALLOW_MIXED=1 git commit ...
+set -euo pipefail
+
+[ "${YCP_ALLOW_MIXED:-0}" = "1" ] && exit 0
+
+staged="$(git diff --cached --name-only --diff-filter=ACM)"
+code="$(printf '%s\n' "$staged" | grep -cE '^(src|tests)/' || true)"
+rootdocs="$(printf '%s\n' "$staged" | grep -cE '^[^/]+\.md$' || true)"
+
+if [ "$code" -gt 0 ] && [ "$rootdocs" -ge 3 ]; then
+  echo "✋ pre-commit blocked: this commit mixes code ($code file(s) under src/ or tests/) with"
+  echo "   $rootdocs root-level *.md docs — the shape of an accidental 'git add -A' sweep."
+  echo ""
+  echo "   Another /loop session may be editing this repo. Commit only the files YOU changed:"
+  echo "     git reset                 # unstage everything"
+  echo "     git add <your-paths>      # stage only your change, by name"
+  echo ""
+  echo "   If this really is one intentional change:  YCP_ALLOW_MIXED=1 git commit ..."
+  exit 1
+fi
+exit 0
