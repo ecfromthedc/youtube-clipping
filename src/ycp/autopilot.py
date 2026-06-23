@@ -2,8 +2,8 @@
 
     source → clip (top-N queued, idempotent) → qc → capture → brief → scoreboard
 
-Distribution (→ Repurpose.io) slots in as a stage once its adapter is wired and
-Eric has connected accounts once (see HANDOFF.md §8 #3 / §9).
+Distribution (→ Postiz, preferred; Repurpose.io alternative) slots in as a stage once
+the token is set + channels connected once (see DISTRIBUTION.md / HANDOFF.md §8 #3 / §9).
 
 Design goals:
 - **Idempotent / safe to re-run.** Already-clipped sources are skipped (no
@@ -187,14 +187,15 @@ def run(
     _stage("scoreboard", _scoreboard, results, log)
 
     # 7 ─ DISTRIBUTE ─────────────────────────────────────────────────────────────
-    # Wired to Repurpose.io (outbox adapter). Stays OFF until Eric connects accounts
-    # + sets distribution.enabled — so it reports the gate instead of posting.
+    # Postiz (preferred) / Repurpose.io (alternative) per distribution.provider. Stays
+    # OFF until the token + channels are connected + distribution.enabled — so it reports
+    # the gate instead of posting. See DISTRIBUTION.md.
     def _distribute() -> str:
         from . import distribute
         r = distribute.run(db_path)
         if not r["enabled"]:
             return f"OFF — {r['waiting']} approved clips waiting; {r['note']}"
-        return f"delivered {r['delivered']} to Repurpose outbox ({r.get('blocked', 0)} blocked)"
+        return f"delivered {r['delivered']} via {settings().get('distribution', {}).get('provider', 'postiz')} ({r.get('blocked', 0)} blocked)"
 
     _stage("distribute", _distribute, results, log)
 

@@ -1,26 +1,31 @@
-"""Stage 7 — DISTRIBUTE. Approved clips → Repurpose.io → connected channels.
+"""Stage 7 — DISTRIBUTE. Approved clips → the connected owned channels.
 
-Repurpose.io watches a cloud source (a Drive/Dropbox folder, etc.) and auto-posts
-to every connected account. So our handoff is deliberately **thin and swappable**:
-drop each approved, publish-gated clip + a metadata sidecar into an OUTBOX folder
-that Eric points Repurpose at. ONE-TIME human step (HANDOFF §9): connect accounts
-+ point Repurpose at the outbox. After that, posting is automatic.
+PREFERRED: Postiz (public API). We hold POSTIZ_API_TOKEN and connect each YouTube
+channel directly in Postiz; per approved clip the PostizAdapter uploads the mp4
+(POST /upload) then creates a post (POST /posts) on that channel's integration id.
 
-Loosely coupled behind an `Adapter` protocol (Eric is trialing Repurpose) — moving
-to platform APIs later is a new adapter, not a rewrite.
+ALTERNATIVE: Repurpose.io (OutboxAdapter) — drop clip + a metadata sidecar into a
+watch-folder Repurpose syncs and auto-posts. Kept as a swappable fallback.
 
-Two safety properties hold here because QC is AUTO (HANDOFF §9):
+Pick the path with `distribution.provider` (postiz | repurpose). Both sit behind the
+`Adapter` protocol, so switching is config, not a rewrite. Full plan, one-time setup,
+and the adapter contract: DISTRIBUTION.md.
+
+Safety properties:
 - Every clip clears `guardrails.publish_allowed` again right before delivery
-  (transformed, no music, clean title) — defense in depth.
-- DISABLED by default (`distribution.enabled: false`) until accounts are connected,
-  so building/testing this never risks an accidental public post.
+  (transformed, no music, clean title) — defense in depth behind the manual Slack QC gate.
+- DISABLED by default (`distribution.enabled: false`) until the token + channels are
+  connected, so building/testing this never risks an accidental public post.
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any, Protocol
+
+import requests
 
 from . import db, guardrails
 from .config import ROOT, settings
@@ -66,7 +71,8 @@ class Adapter(Protocol):
 
 
 class OutboxAdapter:
-    """Drops clip + a JSON metadata sidecar into the folder Repurpose.io watches."""
+    """ALTERNATIVE (Repurpose.io): drops clip + a JSON metadata sidecar into the
+    folder Repurpose watches and auto-posts from."""
 
     def __init__(self, outbox: Path):
         self.outbox = outbox
@@ -80,28 +86,94 @@ class OutboxAdapter:
         return str(dest)
 
 
+class PostizAdapter:
+    """PREFERRED: posts approved clips to channels connected in Postiz via its public API.
+
+    Per clip: upload the mp4 (POST /upload) → create a post (POST /posts) on the target
+    channel's Postiz integration id. We hold POSTIZ_API_TOKEN (HANDOFF §9 / DISTRIBUTION.md).
+    One-time human step: connect each channel in Postiz, then map our channel id → its
+    integration id in `distribution.postiz.channels`.
+    """
+
+    def __init__(self, token: str, api_url: str, channels: dict[str, str],
+                 schedule: str = "now"):
+        self.token = token
+        self.api_url = api_url.rstrip("/")
+        self.channels = channels
+        self.schedule = schedule
+
+    @classmethod
+    def from_config(cls, pz: dict) -> "PostizAdapter":
+        token = os.environ.get(pz.get("token_env", "POSTIZ_API_TOKEN"), "")
+        if not token:
+            raise RuntimeError(
+                "POSTIZ_API_TOKEN not set — add it to .env (see DISTRIBUTION.md / SETUP §3).")
+        return cls(
+            token=token,
+            api_url=pz.get("api_url", "https://api.postiz.com/public/v1"),
+            channels=pz.get("channels", {}),
+            schedule=pz.get("schedule", "now"),
+        )
+
+    def deliver(self, clip_path: Path, meta: dict) -> str:
+        integration_id = self.channels.get(meta.get("channel") or "")
+        if not integration_id:
+            raise RuntimeError(
+                f"no Postiz integration id for channel {meta.get('channel')!r} — map it in "
+                "distribution.postiz.channels (ids from GET /public/v1/integrations).")
+        headers = {"Authorization": self.token}
+        with clip_path.open("rb") as fh:
+            up = requests.post(f"{self.api_url}/upload", headers=headers,
+                               files={"file": (clip_path.name, fh, "video/mp4")}, timeout=180)
+        up.raise_for_status()
+        media = up.json()
+        caption = meta.get("caption", "")
+        body = {
+            "type": self.schedule,
+            "date": meta.get("date") or db.now(),
+            "posts": [{
+                "integration": {"id": integration_id},
+                "value": [{"content": caption,
+                           "image": [{"id": media.get("id"), "path": media.get("path")}]}],
+                "settings": {"__type": meta.get("platform") or "youtube", "title": caption[:100]},
+            }],
+        }
+        resp = requests.post(f"{self.api_url}/posts", headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        out = resp.json()
+        return str(out.get("id") or out.get("postId") or "posted")
+
+
 def _resolve_outbox(cfg: dict) -> Path:
     path = Path(cfg.get("outbox", "data/outbox"))
     return path if path.is_absolute() else ROOT / path
 
 
 def build_adapter(cfg: dict) -> Adapter:
-    # Only one adapter today; `cfg['adapter']` reserved for a future API adapter.
-    return OutboxAdapter(_resolve_outbox(cfg))
+    """Select the distribution adapter. Postiz (API) is preferred; Repurpose.io
+    (outbox watch-folder) is the swappable alternative. See DISTRIBUTION.md."""
+    provider = (cfg.get("provider") or cfg.get("adapter") or "postiz").lower()
+    if provider.startswith("postiz"):
+        return PostizAdapter.from_config(cfg.get("postiz", {}))
+    if provider.startswith("repurpose") or "outbox" in provider:
+        return OutboxAdapter(_resolve_outbox(cfg))
+    raise RuntimeError(f"unknown distribution provider {provider!r} (use 'postiz' or 'repurpose').")
 
 
 def run(db_path: Any = None) -> dict[str, Any]:
     """Hand approved clips to the distribution adapter, marking them posted.
 
-    Gated by `distribution.enabled` (default off) until Repurpose accounts are
-    connected. Re-checks the publish gate per clip — defense in depth under auto-QC.
+    Gated by `distribution.enabled` (default off) until the provider is configured
+    (Postiz token + channels, or Repurpose accounts). Re-checks the publish gate per
+    clip — defense in depth behind the manual Slack QC gate.
     """
     cfg = settings().get("distribution", {})
     if not cfg.get("enabled", False):
         n = len(db.approved_clips(db_path))
         return {"enabled": False, "delivered": 0, "waiting": n,
-                "note": "distribution OFF — connect Repurpose accounts, point it at the "
-                        "outbox, then set distribution.enabled: true"}
+                "note": "distribution OFF — set POSTIZ_API_TOKEN, connect channels in Postiz + "
+                        "map them in distribution.postiz.channels, then set "
+                        "distribution.enabled: true (see DISTRIBUTION.md)"}
     adapter = build_adapter(cfg)
     delivered = blocked = 0
     for clip in db.approved_clips(db_path):

@@ -57,10 +57,27 @@ qc:
   auto: false
 
 distribution:
-  # Posting target = Repurpose.io (§9). DISABLED until Eric connects accounts in
-  # the Repurpose dashboard and points it at the outbox folder, then flip to true.
+  # PREFERRED: Postiz (public API) — we hold POSTIZ_API_TOKEN and connect the YouTube
+  # channels directly in Postiz. ALTERNATIVE: Repurpose.io (outbox watch-folder).
+  # Full plan + adapter contract: DISTRIBUTION.md.
+  # DISABLED until the token is set + channels are connected + mapped below, then flip true.
   enabled: false
-  adapter: repurpose_outbox
+  provider: postiz         # postiz (preferred) | repurpose (alternative)
+
+  postiz:
+    api_url: https://api.postiz.com/public/v1   # self-hosted: <instance>/public/v1
+    token_env: POSTIZ_API_TOKEN                  # key lives in .env / 1Password, never here
+    schedule: now                                # now | schedule
+    # Map each owned channel (CHANNEL-PLAYBOOK.md) -> its Postiz integration id.
+    # Get ids from GET /public/v1/integrations; fill in once channels are connected.
+    channels:
+      hot-seat: ""         # Channel 1
+      money-fights: ""     # Channel 2
+      crash-out: ""        # Channel 3
+      myth-busting: ""     # Channel 4
+      boardroom: ""        # Channel 5
+
+  # Alternative — Repurpose.io watch-folder (used only when provider: repurpose):
   outbox: data/outbox      # the folder Repurpose.io watches (sync to Drive/Dropbox)
 
 platforms: [youtube, tiktok, instagram]
