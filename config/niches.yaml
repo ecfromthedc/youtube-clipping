@@ -2,13 +2,17 @@
 # (RESEARCH-GOAL-AND-LOOP.md), Cycle 1 (2026-06-22). Ranked source list +
 # evidence live in SOURCE-INTELLIGENCE.md; the angles in CHANNEL-CONCEPTS.md.
 #
+# Each group below = ONE owned channel. The canonical channel map (sources -> format ->
+# go/no-go gate -> optimize-on metric) is CHANNEL-PLAYBOOK.md. Groups are keyed by `name:`,
+# and channel numbers here match the playbook (not file order).
+#
 # handle = a YouTube @handle. lane: owned = your YPP transformation channel
 # (the only lane — Whop cut 2026-06; pure owned-first).
 #
 # Velocity numbers in `notes` are real (live yt-dlp peak views/hour, 2026-06-22).
 
 niches:
-  # ── Concept 1: debate/agitation flashpoints (highest engagement velocity) ──
+  # ── Channel 1 · Hot Seat — debate/agitation flashpoints (highest engagement velocity) ──
   - name: debate-agitation
     lane_default: owned
     creators:
@@ -37,7 +41,7 @@ niches:
         lane: owned
         notes: "ROS 56.8. Pure 1v1 debate format; small but clip-friendly; open lane."
 
-  # ── Concept 2: money fights / finance conflict (highest US RPM) ──
+  # ── Channel 2 · Money Fights — finance conflict (highest US RPM) ──
   - name: finance-money
     lane_default: owned
     creators:
@@ -66,7 +70,7 @@ niches:
         lane: owned
         notes: "ROS 55.4 (Cycle 2). *Explicitly encourages clipping* = top compliance; business/keynote quote-bait; high RPM."
 
-  # ── Concept 3: business/finance authority (high-RPM, owned) ──
+  # ── Channel 5 · Boardroom — business/mindset authority (#1 source: Diary of a CEO) ──
   - name: business-finance
     lane_default: owned
     creators:
@@ -89,7 +93,7 @@ niches:
       # Mark Cuban / Trailblazers — low saturation, high-RPM business authority.
       # Add @handle once confirmed; agent-sourced, no live velocity pull yet.
 
-  # ── Concept 4: crash-out comedy/reaction (volume → YPP) ──
+  # ── Channel 3 · Crash Out — comedy/reaction (volume → YPP) ──
   - name: comedy-crashout
     lane_default: owned
     creators:
@@ -110,7 +114,7 @@ niches:
         lane: owned
         notes: "ROS 45.2 but CLEAREST WHITE SPACE — Workaholics IP, no official clips channel. ⚠ iHeart-distributed — test Content ID before scaling."
 
-  # ── Concept 5: myth-busting health/fitness (evergreen, advertiser-safe) ──
+  # ── Channel 4 · Myth-Busting — health/fitness (evergreen, advertiser-safe) ──
   - name: health-mythbusting
     lane_default: owned
     creators:

@@ -16,7 +16,9 @@ scoreboard; the system runs the channels.
    already made (§9), guardrails (§10).
 2. **WIN-GOAL-AND-LOOP.md** — the operative build loop. Paste its `/loop` prompt to run a cycle.
    (It supersedes the older `*-GOAL-AND-LOOP.md` docs, kept as references.)
-3. **SOURCE-INTELLIGENCE.md** / **CHANNEL-CONCEPTS.md** — what to clip / which channels to launch.
+3. **CHANNEL-PLAYBOOK.md** — one card per channel: the sources to clip, the format, the go/no-go
+   gate, and the metric each channel optimizes on. Each channel is a path one agent owns + optimizes.
+   (Backed by `SOURCE-INTELLIGENCE.md` = source scores + `CHANNEL-CONCEPTS.md` = angle rationale.)
 
 ## Run + verify
 ```bash

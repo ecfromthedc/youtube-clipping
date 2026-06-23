@@ -2,6 +2,13 @@
 
 _(Whop cut 2026-06; pure owned-first — the Cash Engine concept was removed and the rest renumbered.)_
 
+> **Operating a channel? Read [CHANNEL-PLAYBOOK.md](CHANNEL-PLAYBOOK.md) first** — it turns these
+> angles into one card per channel (the sources to clip, the format, the go/no-go gate, and the
+> metric each channel optimizes on). This doc is the *why* behind each angle; the playbook is the
+> *how* an agent runs and optimizes it. **Heads-up:** `config/niches.yaml` carries a 5th source
+> group (`business-finance`, anchored by **Diary of a CEO — the #1 source**) that these four
+> concepts don't name; the playbook captures it as **Channel 5 "Boardroom."**
+
 Four distinct content angles, ranked by likelihood of success from Cycle-1 evidence
 (`SOURCE-INTELLIGENCE.md`). Each is a **testable bet** with a hard go/no-go gate, not a
 guess. Spin up 1 channel per concept you want to run; the go/no-go test decides double-down
