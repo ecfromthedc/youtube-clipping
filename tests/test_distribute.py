@@ -21,7 +21,36 @@ def test_auto_qc_rejects_untransformed_clip():
 
 
 def test_caption_falls_back_to_creator():
-    assert distribute.caption_for({"source_creator": "Codie Sanchez"}) == "Codie Sanchez — clip"
+    cap = distribute.caption_for({"source_creator": "Codie Sanchez"})
+    assert cap.startswith("Codie Sanchez — clip")
+    assert "#shorts" in cap                       # default hashtags when no channel
+
+
+def test_caption_includes_channel_hashtags():
+    cap = distribute.caption_for(
+        {"post_title": "muscle is the organ of longevity:", "channel": "phoenix-protocol"})
+    assert cap.startswith("muscle is the organ of longevity:")
+    assert "#longevity" in cap and "#health" in cap
+
+
+def test_assign_slots_rolls_across_days_in_order():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    start = datetime(2026, 6, 24, 7, 0, tzinfo=ZoneInfo("America/New_York"))  # past 06:00
+    slots = distribute.assign_slots(
+        4, ["06:00", "12:30", "19:00"], "America/New_York", start)
+    times = [datetime.fromisoformat(s) for s in slots]
+    assert len(times) == 4
+    assert times == sorted(times)                 # strictly chronological
+    assert (times[0].hour, times[0].minute) == (12, 30)   # 06:00 today already passed
+    assert times[2].date() > times[0].date()      # 4th slot rolled to the next day
+
+
+def test_assign_slots_empty_when_zero():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    assert distribute.assign_slots(
+        0, ["06:00"], "UTC", datetime(2026, 6, 24, tzinfo=ZoneInfo("UTC"))) == []
 
 
 def test_outbox_adapter_writes_clip_and_sidecar(tmp_path):
@@ -34,8 +63,10 @@ def test_outbox_adapter_writes_clip_and_sidecar(tmp_path):
     assert sidecar.exists() and "Hook here" in sidecar.read_text()
 
 
-def test_run_disabled_by_default_reports_gate(monkeypatch):
-    # No settings override → distribution.enabled defaults to false in config.
+def test_run_disabled_reports_gate(monkeypatch):
+    # Force the disabled path (live config now ships enabled: true for production).
+    monkeypatch.setattr(distribute, "settings",
+                        lambda: {"distribution": {"enabled": False, "provider": "postiz"}})
     result = distribute.run(db_path=None)
     assert result["enabled"] is False and "Postiz" in result["note"]
 

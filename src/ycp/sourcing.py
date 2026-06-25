@@ -203,7 +203,12 @@ def run(niches_path: Path | None = None, db_path: Path | None = None) -> list[di
                 print(f"  ! skip {creator['name']}: {exc}")
     for row in rows:  # DB writes on the main thread (sqlite single-writer)
         db.upsert_source_video(row, db_path)
-    return sorted(rows, key=lambda r: r["view_velocity"], reverse=True)
+    # Double-down: bias the queue by what's winning. optimize.run() writes per-creator
+    # multipliers from the scoreboard each cycle; winners rise, losers sink. Default 1.0.
+    from . import optimize
+    weights = optimize.load_weights()
+    return sorted(rows, key=lambda r: r["view_velocity"] * weights.get(r["creator"], 1.0),
+                  reverse=True)
 
 
 def render_queue_md(queue: list[dict[str, Any]]) -> str:

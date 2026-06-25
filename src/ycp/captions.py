@@ -33,6 +33,32 @@ ACTIVE = (255, 222, 0, 255)     # highlighted (current) word — yellow
 IDLE = (255, 255, 255, 255)     # other words in the chunk — white
 OUTLINE = (0, 0, 0, 255)        # fat black stroke for legibility over any footage
 
+# Creative knobs — tunable in settings.yaml under `captions:`. NOTE on size: video
+# captions scale to FRAME WIDTH, not document point size. size_pct=10 → caption height
+# capped at 10% of a 1080-wide frame (~108px, the Opus look). 10px would be invisible.
+CAPTION_CASE = "lower"          # subtitle case: lower | upper
+CAPTION_SIZE_PCT = 10.0         # caption height cap, as % of frame width
+HOOK_HOLD_SEC = 7.0             # hook/title stays on screen at least this long
+
+
+def _caption_cfg() -> dict:
+    """Creative caption knobs from settings.yaml (captions:), with safe fallbacks.
+    Rendering must never hard-break on bad/missing config."""
+    try:
+        from .config import settings
+        c = settings().get("captions") or {}
+    except Exception:  # noqa: BLE001
+        c = {}
+    return {
+        "case": str(c.get("case", CAPTION_CASE)).lower(),
+        "size_pct": float(c.get("size_pct", CAPTION_SIZE_PCT)) / 100.0,
+        "hook_hold_sec": float(c.get("hook_hold_sec", HOOK_HOLD_SEC)),
+    }
+
+
+def _case(s: str, case: str) -> str:
+    return s.lower() if case == "lower" else s.upper()
+
 
 @dataclass(frozen=True)
 class Word:
@@ -112,15 +138,15 @@ def _fit_font(draw, text: str, max_size: int, max_w: int, font_path: str | None,
 
 
 def _draw_chunk(draw, chunk: Chunk, t: float, w: int, y: int, max_size: int,
-                font_path: str | None, stroke: int) -> None:
-    font = _fit_font(draw, chunk.text.upper(), max_size, int(w * 0.92), font_path, stroke)
+                font_path: str | None, stroke: int, case: str = "upper") -> None:
+    font = _fit_font(draw, _case(chunk.text, case), max_size, int(w * 0.92), font_path, stroke)
     gap = int(w * 0.018)
-    widths = [_text_width(draw, word.text.upper(), font, stroke) for word in chunk.words]
+    widths = [_text_width(draw, _case(word.text, case), font, stroke) for word in chunk.words]
     total = sum(widths) + gap * (len(chunk.words) - 1)
     x = (w - total) // 2
     for word, ww in zip(chunk.words, widths):
         active = word.start <= t < word.end
-        draw.text((x, y), word.text.upper(), font=font, anchor="la",
+        draw.text((x, y), _case(word.text, case), font=font, anchor="la",
                   fill=ACTIVE if active else IDLE, stroke_width=stroke, stroke_fill=OUTLINE)
         x += ww + gap
 
@@ -152,22 +178,24 @@ def render_overlay(chunks: list[Chunk], duration: float, out_dir: Path, *,
     """Render a transparent PNG sequence (00000.png ...) for the clip; return frame count."""
     from PIL import Image, ImageDraw
     out_dir.mkdir(parents=True, exist_ok=True)
+    cfg = _caption_cfg()
     w, h = size
     stroke = max(6, w // 135)
     n_frames = max(1, math.ceil(duration * fps))
-    title_dur = 2.5
-    cap_max = int(w * 0.10)
+    title_dur = cfg["hook_hold_sec"]
+    cap_max = int(w * cfg["size_pct"])
     title_size = int(w * 0.072)
     for f in range(n_frames):
         t = f / fps
         img = Image.new("RGBA", size, (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         if title and t < title_dur:
-            _draw_title(d, title.upper(), title_size, int(w * 0.86), w, int(h * 0.10),
+            # Hook + subtitles share the `case` knob (lower); the hook stays BIG via title_size.
+            _draw_title(d, _case(title, cfg["case"]), title_size, int(w * 0.86), w, int(h * 0.10),
                         font_path, stroke)
         ch = next((c for c in chunks if c.start <= t < c.end), None)
         if ch:
-            _draw_chunk(d, ch, t, w, int(h * 0.70), cap_max, font_path, stroke)
+            _draw_chunk(d, ch, t, w, int(h * 0.70), cap_max, font_path, stroke, cfg["case"])
         img.save(out_dir / f"{f:05d}.png")
     return n_frames
 

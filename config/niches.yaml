@@ -114,7 +114,7 @@ niches:
         lane: owned
         notes: "ROS 45.2 but CLEAREST WHITE SPACE — Workaholics IP, no official clips channel. ⚠ iHeart-distributed — test Content ID before scaling."
 
-  # ── Channel 4 · Myth-Busting — health/fitness (evergreen, advertiser-safe) ──
+  # ── Channel 4 · Phoenix Protocol — health/fitness/longevity (evergreen, advertiser-safe) ──
   - name: health-mythbusting
     lane_default: owned
     creators:

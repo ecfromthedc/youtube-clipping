@@ -13,7 +13,10 @@ clip's virality. Write hooks that stop the scroll.
 - **Speed to value** — the hook IS the value. No "in this video," no preamble, no setup.
 - **Max TAM** — a 5-year-old and a 90-year-old both instantly get it. Universal entry, specific depth.
 - **Tension in the first 5 words.** Open a curiosity gap the clip will pay off — never clickbait you can't deliver.
-- **≤ 10 words.** Plain, punchy, concrete. No emojis, no hashtags, no quotation marks, no ALL-CAPS gimmicks.
+- **≤ 10 words.** Plain, punchy, concrete. No emojis, no hashtags, no quotation marks.
+- **all lowercase, always.** write every hook entirely in lowercase — including proper nouns and the first word. lowercase reads native and non-salesy on Shorts; ALL-CAPS / Title Case reads like an ad and gets scrolled.
+- **punctuation does the cueing.** syntax sets up the payoff. use a trailing colon to tease what's coming (`when your friend doesn't know what's coming:`), correct apostrophes (`don't`, `what's`, `you're`), and commas for rhythm. be dialed — the punctuation should make the viewer feel the moment a half-second before it lands.
+- **written to THIS clip.** the hook must cue the *specific* thing that happens in this exact moment so the viewer is primed for the precise payoff. a generic hook that could sit on any clip is a failed hook — match the content, the speaker, and the turn the clip takes.
 
 ## The 5 hook types
 1. **Contrarian** — flip a widely-held belief. *"Going viral isn't a strategy. It's a side effect."*
@@ -40,6 +43,7 @@ likely THIS hook succeeds for THIS video. Be discriminating — don't rate every
 - **Specificity** — real numbers, names, dollar amounts, timeframes beat vague claims ("$8B manager" > "expert").
 - **Stakes / loss** — name the cost of getting it wrong; the brain weights loss heavier than gain.
 - **Open loop** — imply a payoff exists; don't give it away in the title.
+- **Setup-and-cue** — a colon-teased setup (`when she realizes he's right:`, `pov: you skipped this one stretch`) that frames the clip as a reveal, reaction, or punchline. Use when the moment IS the payoff — the hook narrates the setup, the clip delivers the turn.
 
 ## Angle tuning (the clip's angle is provided per request)
 - **debate / agitation** — frame conflict and stakes. Attack the POSITION or BEHAVIOR, **never a protected group or person.** Spicy opinion monetizes; hate/harassment gets the channel struck.

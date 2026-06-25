@@ -52,7 +52,9 @@ hooks:
 qc:
   # auto: true  -> no human; the in-code guardrails decide (fully autonomous).
   # auto: false -> a human approves via the channel below. Flip to true once output earns trust.
-  auto: false
+  # AUTONOMOUS (2026-06-24, Eric's call): no clip-by-clip approval — guardrails are the gate,
+  # the analytics loop is the quality control (kill what underperforms). Weekly review instead.
+  auto: true
   # The review channel is NOT hardcoded. `auto` picks by configured creds
   # (slack > telegram > local). Or force one: slack | telegram | local.
   channel: auto
@@ -61,25 +63,41 @@ distribution:
   # PREFERRED: Postiz (public API) — we hold POSTIZ_API_TOKEN and connect the YouTube
   # channels directly in Postiz. ALTERNATIVE: Repurpose.io (outbox watch-folder).
   # Full plan + adapter contract: DISTRIBUTION.md.
-  # DISABLED until the token is set + channels are connected + mapped below, then flip true.
-  enabled: false
+  # LIVE (2026-06-24): POSTIZ_API_TOKEN set, Phoenix Protocol id verified + mapped below.
+  # Manual Slack QC (qc.auto: false) is still the publish gate — nothing posts without a ✅.
+  enabled: true
   provider: postiz         # postiz (preferred) | repurpose (alternative)
 
   postiz:
     api_url: https://api.postiz.com/public/v1   # self-hosted: <instance>/public/v1
     token_env: POSTIZ_API_TOKEN                  # key lives in .env / 1Password, never here
-    schedule: now                                # now | schedule
+    schedule: schedule                           # now | schedule (schedule → space posts across the slots below)
+    # Posting cadence for the owned channels. Approved clips are assigned to the next
+    # free slots in order (today's remaining, then roll to following days). Channel-local
+    # time. 3/day at US health-audience peaks: morning routine, lunch scroll, evening wind-down.
+    posting_times: ["06:00", "12:30", "19:00"]
+    timezone: America/New_York
     # Map each owned channel (CHANNEL-PLAYBOOK.md) -> its Postiz integration id.
     # Get ids from GET /public/v1/integrations; fill in once channels are connected.
     channels:
       hot-seat: ""         # Channel 1
       money-fights: ""     # Channel 2
       crash-out: ""        # Channel 3
-      myth-busting: ""     # Channel 4
+      phoenix-protocol: "cmqsakb8z0123ml0yd61m7h9g"  # Channel 4 (Phoenix Protocol — health/longevity). VERIFIED 2026-06-24 via GET /integrations.
       boardroom: ""        # Channel 5
 
   # Alternative — Repurpose.io watch-folder (used only when provider: repurpose):
   outbox: data/outbox      # the folder Repurpose.io watches (sync to Drive/Dropbox)
+
+  # Per-channel hashtags appended to each post's description (keyed by channel slug).
+  # #shorts is the discovery essential; keep the rest tight + niche-relevant (3–5 wins).
+  hashtags:
+    default: ["#shorts"]
+    phoenix-protocol: ["#shorts", "#health", "#longevity", "#fitness", "#wellness"]
+    hot-seat: ["#shorts", "#debate", "#podcast", "#hottakes"]
+    money-fights: ["#shorts", "#money", "#finance", "#investing"]
+    crash-out: ["#shorts", "#podcast", "#comedy", "#funny"]
+    boardroom: ["#shorts", "#business", "#entrepreneur", "#mindset"]
 
 platforms: [youtube, tiktok, instagram]
 lanes: [owned]   # owned = YPP asset (Whop cut 2026-06; pure owned-first)
@@ -97,3 +115,22 @@ vision:
 # center = static center crop. Falls back to center whenever no face is found.
 reframe:
   mode: face
+
+# --- Captions / hook styling -------------------------------------------------
+# case:     subtitle case — lower | upper (the hook title stays uppercase).
+# size_pct: caption height as a % of FRAME WIDTH (not document points). 10 ≈ 108px
+#           on a 1080-wide frame (the Opus look). 10px would be invisible.
+# hook_hold_sec: how long the burned hook title stays on screen, minimum.
+captions:
+  case: lower
+  size_pct: 10
+  hook_hold_sec: 7
+
+# --- Optimize (the double-down actuator) -------------------------------------
+# Each cycle, winners (top-quantile virality) get sourced harder, losers throttled.
+# boost/suppress multiply a creator's source-ranking velocity; floor keeps a starved
+# creator from vanishing entirely (so it can recover if it starts winning again).
+optimize:
+  boost: 1.5
+  suppress: 0.4
+  floor: 0.1

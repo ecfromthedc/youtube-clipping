@@ -22,8 +22,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -61,9 +63,41 @@ def auto_qc(db_path: Any = None) -> dict[str, int]:
 
 # ── distribution adapter ──────────────────────────────────────────────────────
 
+def hashtags_for(channel: str | None) -> list[str]:
+    """Curated, niche-appropriate hashtags for a channel slug (from settings, tunable).
+    Falls back to the `default` set, then to #shorts. Pure read."""
+    tags = settings().get("distribution", {}).get("hashtags", {})
+    return tags.get(channel or "") or tags.get("default") or ["#shorts"]
+
+
 def caption_for(clip: dict[str, Any]) -> str:
-    """Post caption/title for a clip (the burned hook is the on-screen title)."""
-    return clip.get("post_title") or f"{clip.get('source_creator', '')} — clip".strip(" —")
+    """Post caption for a clip: the hook title + the channel's hashtags. The burned hook
+    is the on-screen title; the tags ride in the post description for discovery."""
+    title = clip.get("post_title") or f"{clip.get('source_creator', '')} — clip".strip(" —")
+    tags = " ".join(hashtags_for(clip.get("channel")))
+    return f"{title}\n\n{tags}".strip()
+
+
+def assign_slots(n: int, times: list[str], tz: str, start: datetime) -> list[str]:
+    """The next `n` posting slots (ISO strings) drawn from `times` (HH:MM, channel-local),
+    at/after `start`, rolling to following days. Pure — pass `start` in so it's testable."""
+    if n <= 0:
+        return []
+    zone = ZoneInfo(tz)
+    start = start.astimezone(zone)
+    ordered = sorted(times)
+    out: list[str] = []
+    day = start.date()
+    while len(out) < n:
+        for hhmm in ordered:
+            hh, mm = (int(x) for x in hhmm.split(":"))
+            cand = datetime.combine(day, dtime(hh, mm, tzinfo=zone))
+            if cand >= start:
+                out.append(cand.isoformat())
+                if len(out) == n:
+                    break
+        day += timedelta(days=1)
+    return out
 
 
 class Adapter(Protocol):
@@ -175,8 +209,18 @@ def run(db_path: Any = None) -> dict[str, Any]:
                         "map them in distribution.postiz.channels, then set "
                         "distribution.enabled: true (see DISTRIBUTION.md)"}
     adapter = build_adapter(cfg)
+    clips = db.approved_clips(db_path)
+
+    # Schedule mode → assign each approved clip to the next free posting slot so the
+    # channel posts on a steady cadence instead of dumping the whole batch at once.
+    pz = cfg.get("postiz", {})
+    slots: list[str] = []
+    if (cfg.get("provider") or "postiz").startswith("postiz") and pz.get("schedule") == "schedule":
+        tz = pz.get("timezone", "UTC")
+        slots = assign_slots(len(clips), pz.get("posting_times", []), tz, datetime.now(ZoneInfo(tz)))
+
     delivered = blocked = 0
-    for clip in db.approved_clips(db_path):
+    for i, clip in enumerate(clips):
         meta = {
             "transformed": clip.get("fmt") == "auto-clip",
             "has_music": bool(clip.get("has_music", False)),
@@ -190,6 +234,7 @@ def run(db_path: Any = None) -> dict[str, Any]:
         dest = adapter.deliver(Path(clip.get("post_url") or ""), {
             "clip_id": clip["clip_id"], "caption": caption_for(clip),
             "channel": clip.get("channel"), "platform": clip.get("platform"),
+            "date": slots[i] if i < len(slots) else None,
         })
         db.set_clip_status(clip["clip_id"], "posted", db_path=db_path,
                            post_url=dest, posted_at=db.now())

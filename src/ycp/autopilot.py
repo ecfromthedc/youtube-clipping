@@ -43,6 +43,27 @@ def angle_for(niche: str | None) -> str:
     return ""
 
 
+# niche name (niches.yaml `name:`) → owned-channel slug (the Postiz routing key in
+# settings.yaml distribution.postiz.channels). ponytail: explicit 5-entry map; if the
+# channel set ever goes dynamic, add a `channel:` key per niche group in niches.yaml.
+CHANNEL_SLUGS: dict[str, str] = {
+    "debate-agitation": "hot-seat",
+    "finance-money": "money-fights",
+    "comedy-crashout": "crash-out",
+    "health-mythbusting": "phoenix-protocol",
+    "business-finance": "boardroom",
+}
+
+
+def channel_for(niche: str | None) -> str:
+    """Map a niche label → its owned-channel slug (the Postiz routing key). Pure.
+
+    Unknown niches fall back to 'clips', which won't match a configured Postiz
+    integration → distribution raises loudly rather than posting to the wrong channel.
+    """
+    return CHANNEL_SLUGS.get((niche or "").lower(), "clips")
+
+
 @dataclass(frozen=True)
 class StageResult:
     name: str
@@ -135,7 +156,7 @@ def run(
                 lane=row.get("lane", "owned"),
                 source_creator=row.get("creator", "unknown"),
                 source_video_id=row.get("video_id"),
-                channel=row.get("creator", "clips"),
+                channel=channel_for(row.get("niche")),
                 hook_cta=hook_cta,
                 angle=angle_for(row.get("niche")),
                 db_path=db_path,
@@ -182,6 +203,17 @@ def run(
         return "Race to $15K → SCOREBOARD.md"
 
     _stage("scoreboard", _scoreboard, results, log)
+
+    # 6.5 ─ OPTIMIZE ─────────────────────────────────────────────────────────────
+    # The actuator: turn the scoreboard's scale/kill verdicts into source weights for
+    # the NEXT cycle (double down on winners, starve losers) + journal it to IMPROVEMENT-LOG.md.
+    def _optimize() -> str:
+        from . import optimize
+        r = optimize.run(db_path)
+        return (f"learned from {r['clips']} clips → +{len(r['boosted'])} boosted / "
+                f"-{len(r['suppressed'])} starved (→ IMPROVEMENT-LOG.md)")
+
+    _stage("optimize", _optimize, results, log)
 
     # 7 ─ DISTRIBUTE ─────────────────────────────────────────────────────────────
     # Postiz (preferred) / Repurpose.io (alternative) per distribution.provider. Stays

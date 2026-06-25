@@ -52,14 +52,17 @@ def capture_public(db_path: Path | None = None) -> int:
 def capture_full_analytics(db_path: Path | None = None) -> int:
     """Retention %, RPM, ad revenue per owned channel via YouTube Analytics API.
 
-    Requires OAuth per channel (YT_OAUTH_CLIENT_SECRET_JSON in .env). This is a
-    deliberate stub — wiring real OAuth is a setup task, not something to fake.
-    To enable: install google-api-python-client + google-auth-oauthlib, run the
-    one-time consent flow per channel, then query the 'reports' endpoint for
-    estimatedRevenue, averageViewPercentage, and views grouped by video.
+    OAuth is now wired (scripts/yt_oauth.py wrote YT_CLIENT_ID/SECRET/REFRESH_TOKEN/
+    CHANNEL_ID to .env, scopes incl. yt-analytics + monetary). The remaining gap is
+    the clip→YouTube-videoId linkage: per-video analytics needs each Short's video id,
+    which we only learn from the Postiz publish response on a real post. Once clips carry
+    a `yt_video_id`, this queries reports(ids='channel==MINE', dimensions='video',
+    metrics='views,averageViewPercentage,estimatedRevenue') and writes them per clip.
+
+    Until the first posts flow and the linkage is stored, public views (capture_public)
+    drive the loop — views is the dominant scoring weight, so learning works today.
     """
     raise NotImplementedError(
-        "Full analytics needs YouTube Analytics OAuth per channel. "
-        "Public views (capture_public) cover the early loop; "
-        "wire OAuth when owned channels approach YPP. See docstring."
+        "Owned analytics ready (OAuth wired) but needs the clip→videoId linkage from "
+        "the first Postiz post. capture_public covers the loop until then. See docstring."
     )

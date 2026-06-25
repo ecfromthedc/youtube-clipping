@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 slack = ["slack-bolt>=1.18", "slack-sdk>=3.27"]
+youtube = ["google-auth-oauthlib>=1.2", "google-api-python-client>=2.0"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]

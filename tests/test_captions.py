@@ -25,6 +25,19 @@ def test_build_chunks_enforces_min_dwell():
     assert chunks and chunks[0].end - chunks[0].start >= 0.5
 
 
+def test_case_helper_lowercases():
+    assert captions._case("Dr Mike SAYS", "lower") == "dr mike says"
+    assert captions._case("loud", "upper") == "LOUD"
+
+
+def test_caption_cfg_reflects_settings():
+    # settings.yaml: case=lower, size_pct=10, hook_hold_sec=7 (Eric's spec).
+    cfg = captions._caption_cfg()
+    assert cfg["case"] == "lower"
+    assert cfg["hook_hold_sec"] >= 7.0
+    assert abs(cfg["size_pct"] - 0.10) < 1e-9
+
+
 def test_render_overlay_writes_transparent_frames(tmp_path):
     chunks = captions.build_chunks([Segment(0.0, 1.0, "hello world now")])
     n = captions.render_overlay(chunks, duration=1.0, out_dir=tmp_path / "f",

@@ -28,6 +28,19 @@ def test_respects_max_videos():
     assert [r["video_id"] for r in picked] == ["a"]
 
 
+def test_channel_for_routes_health_niche_to_phoenix_protocol():
+    assert autopilot.channel_for("health-mythbusting") == "phoenix-protocol"
+    assert autopilot.channel_for(None) == "clips"          # unknown → loud-fail fallback
+
+
+def test_channel_slugs_all_have_a_postiz_mapping():
+    # The routing key a clip carries MUST be a configured Postiz channel, or
+    # distribution can't find an integration id for it.
+    from ycp.config import settings
+    configured = set(settings()["distribution"]["postiz"]["channels"])
+    assert set(autopilot.CHANNEL_SLUGS.values()) == configured
+
+
 def test_default_lane_is_owned_only():
     # owned is the only lane; the default filter admits exactly the owned rows.
     assert autopilot.DEFAULT_LANES == ("owned",)

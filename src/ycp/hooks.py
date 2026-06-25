@@ -39,9 +39,12 @@ _FALLBACK_PLAYBOOK = (
     "clip channels. Write the on-screen TITLE hook that stops the scroll in the first "
     "second. Speed to value (the hook IS the value), tension in the first 5 words, open "
     "a curiosity gap, be specific, MAX 10 words, no emojis/hashtags/quotes, never "
-    "clickbait you can't pay off. Use the 5 hook types — Contrarian, Labeling, Curiosity "
-    "Gap, Reframe, Pattern Interrupt — pick the types most likely to succeed for THIS "
-    "clip. Respond ONLY with JSON: "
+    "clickbait you can't pay off. ALWAYS write the hook entirely in lowercase. Use "
+    "punctuation to cue the payoff — a trailing colon to tease what's coming (e.g. "
+    "\"when your friend doesn't know what's coming:\") and correct apostrophes. The hook "
+    "MUST cue the specific thing that happens in THIS clip (no generic hooks). Use the 5 "
+    "hook types — Contrarian, Labeling, Curiosity Gap, Reframe, Pattern Interrupt — pick "
+    "the types most likely to succeed for THIS clip. Respond ONLY with JSON: "
     '{"hooks": [{"text": "...", "type": "Curiosity Gap", "fit": 0.0}]}.'
 )
 
