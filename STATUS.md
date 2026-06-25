@@ -14,7 +14,8 @@ _Read this first for current state; the doc map at the bottom has the detailed p
 - ✅ **First autonomous cron cycle fired and posted live** — the engine works end-to-end, unattended.
 - 🔴 **It over-posted** (38 clips/run ≈ 2-week backlog — "post every clip + A/B every moment"). **FIXED:** quality-selection — post only the single highest-score clip per cycle, skip the rest; A/B only the top moment. **Backlog purged** (38 scheduled posts deleted from Postiz).
 - 🟡 **Rust cutover = NO-GO.** The binary runs the whole pipeline, but the hook-title render is broken + durations/scores off. **Python stays production**; Rust fixes queued (low priority — Python works).
-- ⚠️ **5 clips are already live** on the channel (1 validation post + 4 that auto-published before quality-selection landed). We hold read-only YouTube scope, so they can't be deleted via API — remove the 4 flood clips in YouTube Studio for a clean slate, or leave them as seed content.
+- ✅ **Only 1 clip is live on Phoenix Protocol** — the on-brand zone-2 cardio validation clip. The "flood" was 38 *scheduled* (not published) posts, now purged. (Postiz's published list also showed other channels' videos — verified via the API; only ours counts.)
+- 🧹 **Autonomous video cleanup wired** — `ycp delete-video <id>` (YouTube write scope), hardened to delete ONLY videos on our channel, so the operator can clean its own mistakes without touching anything else.
 
 ## Operating config (current)
 - **Posting:** 12:30 / 3:00 / 8:00 PM ET (prime Shorts windows). Content cron produces at 5am + 1pm.
@@ -34,4 +35,5 @@ _Read this first for current state; the doc map at the bottom has the detailed p
 - **MONETIZATION.md** — YPP path, readiness checklist, the transformed-clips eligibility rule.
 - **OPERATING-PLAN.md** — the closed-loop system + cron cadence.
 - **IMPROVEMENT-LOG.md** — what the loop changed each cycle (auto-appended).
+- **LEARNINGS.md** — mistakes & fixes, so the team doesn't repeat them.
 - **HANDOFF.md** — original cold-start brief. **rust/README.md** — Rust port status.

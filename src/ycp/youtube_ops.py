@@ -9,30 +9,46 @@ from __future__ import annotations
 from . import capture
 
 
-def delete_video(video_id: str) -> bool:
-    """Delete ONE YouTube video the channel owns, by id. Returns True on success. Logs it."""
+def _yt():
     creds = capture._yt_creds()
     if creds is None:
+        return None
+    from googleapiclient.discovery import build
+    return build("youtube", "v3", credentials=creds)
+
+
+def delete_video(video_id: str, our_channel: str | None = None, yt=None) -> bool:
+    """Delete ONE video — ONLY if it's on OUR channel. Returns True on success. Logs it.
+
+    Safety: Postiz release ids can span multiple channels; we verify ownership before issuing
+    a destructive delete so we never touch another channel's content (YouTube 403s anyway).
+    """
+    yt = yt or _yt()
+    if yt is None:
         print("[yt-delete] no YouTube creds — run scripts/yt_oauth.py")
         return False
-    try:
-        from googleapiclient.discovery import build
-    except ImportError:
-        print("[yt-delete] google-api-python-client missing")
+    mine = our_channel or yt.channels().list(part="id", mine=True).execute()["items"][0]["id"]
+    items = yt.videos().list(part="snippet", id=video_id).execute().get("items", [])
+    if not items:
+        print(f"[yt-delete] ✗ {video_id}: not found")
         return False
-    yt = build("youtube", "v3", credentials=creds)
+    if items[0]["snippet"]["channelId"] != mine:
+        print(f"[yt-delete] ✗ {video_id}: not on our channel — skipped (safety)")
+        return False
     try:
         yt.videos().delete(id=video_id).execute()
-        print(f"[yt-delete] ✓ removed video {video_id}")
+        print(f"[yt-delete] ✓ removed {video_id}")
         return True
     except Exception as exc:  # noqa: BLE001
-        msg = str(exc)[:200]
-        hint = " (need write scope — re-run scripts/yt_oauth.py)" if "insufficient" in msg.lower() \
-            or "403" in msg else ""
-        print(f"[yt-delete] ✗ FAILED {video_id}: {msg}{hint}")
+        print(f"[yt-delete] ✗ FAILED {video_id}: {str(exc)[:160]}")
         return False
 
 
 def delete_videos(video_ids: list[str]) -> int:
-    """Delete several videos by id. Returns count removed."""
-    return sum(1 for v in video_ids if delete_video(v))
+    """Delete several videos (ours only). Resolves our channel once. Returns count removed."""
+    yt = _yt()
+    if yt is None:
+        print("[yt-delete] no YouTube creds — run scripts/yt_oauth.py")
+        return 0
+    mine = yt.channels().list(part="id", mine=True).execute()["items"][0]["id"]
+    return sum(1 for v in video_ids if delete_video(v, our_channel=mine, yt=yt))
