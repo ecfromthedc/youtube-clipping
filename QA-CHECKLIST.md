@@ -54,7 +54,11 @@ The definition of "flawless" for this build. The Ralph loop works this top-to-bo
       ['question','cliffhanger'], prefer_length:'45-60s'}`. `learned-weights.json` = `{Flagrant:1.5,
       RandomVlogger:0.4}` (boost winner / starve loser). Log entry appended with sampled/top-creators/
       doubling-down lines. Winners match mock's engineered quality (Flagrant 0.95 vs RandomVlogger 0.12).
-- [ ] **milestones**: reads real channel stats, correct progress line, no false crossings
+- [x] **milestones**: reads real channel stats, correct progress line, no false crossings
+      — `fetch_stats()` live (read-only Data+Analytics): `{subs:0, lifetime_views:0, views_90d:0, revenue_30d:0}`
+      (Day-0 channel). `progress_line` → *"subs 0/500 (YPP) · 90d views 0/3M · run-rate $0/mo of $15,000"*.
+      New crossings vs real state: `[]` — no false fire at 0. Ladder idempotent: 3 subs→none, 150→fires "100",
+      re-run→none. (Computed on a COPY of state — no save, no Slack post.)
 - [ ] **archive**: a clip lands in the Phoenix Protocol Drive folder
 - [ ] **cleanup**: prunes local files of posted clips only
 - [ ] **delete-video**: refuses a video NOT on our channel (safety); accepts one that is
