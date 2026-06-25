@@ -9,6 +9,13 @@ cd "$(dirname "$0")/.."
 mkdir -p data/logs
 LOG="data/logs/ralph.log"
 
+# `claude` is an interactive alias (clears proxy vars); call the real binary the same way.
+CLAUDE_BIN="${CLAUDE_BIN:-/opt/homebrew/bin/claude}"
+run_claude() {
+  ALL_PROXY= HTTPS_PROXY= HTTP_PROXY= all_proxy= https_proxy= http_proxy= \
+    "$CLAUDE_BIN" "$@"
+}
+
 # Scoped allowlist so a headless run can edit + build + commit unattended — WITHOUT the banned
 # --dangerously-skip-permissions. If an iteration reports a denied command, add it here.
 ALLOW=(--permission-mode acceptEdits --allowedTools
@@ -27,7 +34,7 @@ for i in $(seq 1 40); do
     break
   fi
   echo "── iteration $i  $(date +%H:%M:%S) ──" | tee -a "$LOG"
-  claude -p "$(cat rust/PROMPT.md)" "${ALLOW[@]}" >>"$LOG" 2>&1 \
+  run_claude -p "$(cat rust/PROMPT.md)" "${ALLOW[@]}" >>"$LOG" 2>&1 \
     || echo "(iteration $i exited non-zero)" | tee -a "$LOG"
   sleep 3
 done
