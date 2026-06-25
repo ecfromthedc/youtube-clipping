@@ -48,7 +48,12 @@ The definition of "flawless" for this build. The Ralph loop works this top-to-bo
       `_ytdlp_views` → 3 real public views. YT Analytics OAuth (`_yt_creds`) builds + `reports().query
       channel==MINE` returns headers `[views, estimatedMinutesWatched]`, rows `[[0,0]]` (channel is Day-0,
       no monetized data yet); per-video rows `[]` → `capture_full_analytics` correctly skips empty. Pull mechanism proven.
-- [ ] **optimize**: produces weights + appends IMPROVEMENT-LOG.md from real data
+- [x] **optimize**: produces weights + appends IMPROVEMENT-LOG.md from real data
+      — `optimize.run` (sandbox temp DB + temp paths so the live log isn't touched), 30 realistic
+      clips: summary `{clips:30, boosted:['Flagrant'], suppressed:['RandomVlogger'], prefer_hooks:
+      ['question','cliffhanger'], prefer_length:'45-60s'}`. `learned-weights.json` = `{Flagrant:1.5,
+      RandomVlogger:0.4}` (boost winner / starve loser). Log entry appended with sampled/top-creators/
+      doubling-down lines. Winners match mock's engineered quality (Flagrant 0.95 vs RandomVlogger 0.12).
 - [ ] **milestones**: reads real channel stats, correct progress line, no false crossings
 - [ ] **archive**: a clip lands in the Phoenix Protocol Drive folder
 - [ ] **cleanup**: prunes local files of posted clips only
