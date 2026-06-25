@@ -224,7 +224,9 @@ def run(
         r = distribute.run(db_path)
         if not r["enabled"]:
             return f"OFF — {r['waiting']} approved clips waiting; {r['note']}"
-        return f"delivered {r['delivered']} via {settings().get('distribution', {}).get('provider', 'postiz')} ({r.get('blocked', 0)} blocked)"
+        prov = settings().get("distribution", {}).get("provider", "postiz")
+        return (f"delivered {r['delivered']} via {prov} ({r.get('parked', 0)} parked "
+                f"[channel not connected], {r.get('blocked', 0)} blocked, {r.get('failed', 0)} failed)")
 
     _stage("distribute", _distribute, results, log)
 

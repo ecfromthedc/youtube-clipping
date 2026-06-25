@@ -209,18 +209,30 @@ def run(db_path: Any = None) -> dict[str, Any]:
                         "map them in distribution.postiz.channels, then set "
                         "distribution.enabled: true (see DISTRIBUTION.md)"}
     adapter = build_adapter(cfg)
-    clips = db.approved_clips(db_path)
-
-    # Schedule mode → assign each approved clip to the next free posting slot so the
-    # channel posts on a steady cadence instead of dumping the whole batch at once.
+    provider = (cfg.get("provider") or "postiz")
     pz = cfg.get("postiz", {})
-    slots: list[str] = []
-    if (cfg.get("provider") or "postiz").startswith("postiz") and pz.get("schedule") == "schedule":
-        tz = pz.get("timezone", "UTC")
-        slots = assign_slots(len(clips), pz.get("posting_times", []), tz, datetime.now(ZoneInfo(tz)))
+    # Postiz: only channels with a mapped integration id can post. Clips for channels not
+    # connected yet are PARKED (left approved so they flush once mapped) — a not-yet-set-up
+    # channel must never crash the whole distribute batch and block the connected ones.
+    mapped = ({k for k, v in (pz.get("channels") or {}).items() if v}
+              if provider.startswith("postiz") else None)
+    postable, parked = [], 0
+    for clip in db.approved_clips(db_path):
+        if mapped is not None and clip.get("channel") not in mapped:
+            parked += 1
+        else:
+            postable.append(clip)
 
-    delivered = blocked = 0
-    for i, clip in enumerate(clips):
+    # Schedule mode → assign each postable clip to the next free posting slot so the
+    # channel posts on a steady cadence instead of dumping the whole batch at once.
+    slots: list[str] = []
+    if provider.startswith("postiz") and pz.get("schedule") == "schedule":
+        tz = pz.get("timezone", "UTC")
+        slots = assign_slots(len(postable), pz.get("posting_times", []), tz,
+                             datetime.now(ZoneInfo(tz)))
+
+    delivered = blocked = failed = 0
+    for i, clip in enumerate(postable):
         meta = {
             "transformed": clip.get("fmt") == "auto-clip",
             "has_music": bool(clip.get("has_music", False)),
@@ -231,12 +243,18 @@ def run(db_path: Any = None) -> dict[str, Any]:
             db.set_clip_status(clip["clip_id"], "rejected", db_path=db_path)
             blocked += 1
             continue
-        dest = adapter.deliver(Path(clip.get("post_url") or ""), {
-            "clip_id": clip["clip_id"], "caption": caption_for(clip),
-            "channel": clip.get("channel"), "platform": clip.get("platform"),
-            "date": slots[i] if i < len(slots) else None,
-        })
+        try:
+            dest = adapter.deliver(Path(clip.get("post_url") or ""), {
+                "clip_id": clip["clip_id"], "caption": caption_for(clip),
+                "channel": clip.get("channel"), "platform": clip.get("platform"),
+                "date": slots[i] if i < len(slots) else None,
+            })
+        except Exception as exc:  # noqa: BLE001 — one clip's failure must not kill the batch
+            print(f"  ! post failed for {clip['clip_id']} ({clip.get('channel')}): {str(exc)[:140]}")
+            failed += 1
+            continue
         db.set_clip_status(clip["clip_id"], "posted", db_path=db_path,
                            post_url=dest, posted_at=db.now())
         delivered += 1
-    return {"enabled": True, "delivered": delivered, "blocked": blocked}
+    return {"enabled": True, "delivered": delivered, "blocked": blocked,
+            "parked": parked, "failed": failed}

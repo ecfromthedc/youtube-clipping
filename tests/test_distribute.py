@@ -71,6 +71,33 @@ def test_run_disabled_reports_gate(monkeypatch):
     assert result["enabled"] is False and "Postiz" in result["note"]
 
 
+def test_run_parks_unconnected_channels(monkeypatch):
+    # Only phoenix-protocol is mapped; a money-fights clip must be PARKED, not crash the batch.
+    cfg = {"distribution": {"enabled": True, "provider": "postiz", "postiz": {
+        "channels": {"phoenix-protocol": "intg-1", "money-fights": ""}, "schedule": "now"}}}
+    monkeypatch.setattr(distribute, "settings", lambda: cfg)
+    clips = [
+        {"clip_id": "p1", "channel": "phoenix-protocol", "fmt": "auto-clip",
+         "post_url": "/x.mp4", "platform": "youtube", "source_creator": "Jeff Nippard"},
+        {"clip_id": "m1", "channel": "money-fights", "fmt": "auto-clip",
+         "post_url": "/y.mp4", "platform": "youtube", "source_creator": "Ramit"},
+    ]
+    monkeypatch.setattr(distribute.db, "approved_clips", lambda db_path=None: clips)
+    statuses: dict[str, str] = {}
+    monkeypatch.setattr(distribute.db, "set_clip_status",
+                        lambda cid, st, **k: statuses.__setitem__(cid, st))
+    monkeypatch.setattr(distribute.db, "now", lambda: "2026-06-24T00:00:00")
+
+    class _FakeAdapter:
+        def deliver(self, path, meta):
+            return "yt-posted-1"
+
+    monkeypatch.setattr(distribute, "build_adapter", lambda c: _FakeAdapter())
+    r = distribute.run(db_path=None)
+    assert r["parked"] == 1 and r["delivered"] == 1 and r["failed"] == 0
+    assert statuses.get("p1") == "posted" and "m1" not in statuses
+
+
 class _FakeResp:
     def __init__(self, data):
         self._data = data
