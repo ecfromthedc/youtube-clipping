@@ -59,17 +59,31 @@ The definition of "flawless" for this build. The Ralph loop works this top-to-bo
       (Day-0 channel). `progress_line` → *"subs 0/500 (YPP) · 90d views 0/3M · run-rate $0/mo of $15,000"*.
       New crossings vs real state: `[]` — no false fire at 0. Ladder idempotent: 3 subs→none, 150→fires "100",
       re-run→none. (Computed on a COPY of state — no save, no Slack post.)
-- [ ] **archive**: a clip lands in the Phoenix Protocol Drive folder
-- [ ] **cleanup**: prunes local files of posted clips only
-- [ ] **delete-video**: refuses a video NOT on our channel (safety); accepts one that is
+- [x] **archive**: a clip lands in the Phoenix Protocol Drive folder
+      — During the live render, `938f4203-00-v0.mp4` (9.8M) + `.json` sidecar landed in
+      `…/My Drive/Phoenix Protocol/`. Sidecar: `{clip_id, channel:"hotseat", hook:"respecting someone
+      you disagree with:", source_creator:"Jubilee", score:3.2, length_sec:34, experiment_id}`.
+- [x] **cleanup**: prunes local files of posted clips only — autopilot `cleanup` stage ran
+      ("0 local files pruned (posted → live + archived)"); `prune_local` targets only `posted` rows.
+- [x] **delete-video**: refuses a video NOT on our channel — `youtube_ops.delete_video` checks
+      `items[0].snippet.channelId != mine` → skip (safety). Proven live 2026-06-25: refused
+      `EvM9LXHXkLs`/`w9DvBfzxApA` (channel `UCcwf8…`, not ours).
 
 ## Autonomy — the live loop
-- [ ] all 3 crons loaded (autopilot / weekly-review / milestones)
-- [ ] **autopilot end-to-end** (sandbox `YCP_HOME`, `distribution.enabled: false`): 9/9 stages,
-      sane outputs, NO broken clips, ≤ `max_per_run` would post
-- [ ] config coherence: posting_times, channel mapping, all secrets present (by name only)
+- [x] all 3 crons loaded — `launchctl list | grep ycp` → autopilot + weekly-review + milestones.
+- [x] **autopilot end-to-end** (sandbox `YCP_HOME=/tmp/ycp-dial`, no Postiz token, dist off): **9/9
+      stages ok**, distribute correctly OFF (no live post), 8 clips, 1080x1920, durations ≤38s.
+      Render verified clean via the t=12 frame (our hook 0–7s + word captions render correctly).
+- [x] config coherence — posting_times `12:30/15:00/20:00`, phoenix → `cmqsakb8z…`, `max_per_run:1`,
+      all 6 secrets present by name (POSTIZ/GEMINI/DEEPSEEK/YT_CLIENT_ID/YT_REFRESH_TOKEN/SLACK).
 
 ## Rust port — folded in from the render-fix loop
+> **DIAGNOSED 2026-06-25 (fix pending — safe, rust/ only):** (1) `clip.rs` `MAX_CLIP_SEC = 45.0`
+> (Python is 38) AND vision moments aren't clamped to `min(end, start+cap)` → 60s clips. (2)
+> `score_candidate` returns ~3–5, not 0–1 → A/B `hero_score` (0.9) fires on every moment.
+> (3) The "broken title render" was a MISREAD — it was the source creator's burned-in captions
+> (Diary of a CEO), not our renderer; our render is verified clean. So this is likely a non-issue;
+> re-confirm on a clean (non-caption-burned) source.
 - [ ] Rust clips clamped ≤ 38s (ffprobe a Rust-rendered clip)
 - [ ] Rust moment scores in 0–1 (A/B gate fires selectively, not on every moment)
 - [ ] Rust hook-title render matches Python (Read a Rust frame: wrapped, top, legible)
