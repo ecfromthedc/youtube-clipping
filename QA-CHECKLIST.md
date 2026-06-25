@@ -16,9 +16,17 @@ The definition of "flawless" for this build. The Ralph loop works this top-to-bo
 
 ## Pipeline stages — verify on REAL inputs
 - [x] **source**: `ycp source` returns a ranked queue from live yt-dlp (record N) — `.venv/bin/python -m ycp source` → **51 videos queued** → `data/source-queue.md`; live yt-dlp scores (top: Jubilee 3,363 / 76,111 views)
-- [ ] **clip render**: Read a real rendered frame, confirm ALL — captions legible + lowercase;
+- [x] **clip render**: Read a real rendered frame, confirm ALL — captions legible + lowercase;
       hook present, lowercase, held ≥7s; **NO double subtitles** (RULE #1: hook stays + ONE
       caption set); duration 20–35s (ffprobe); vertical 1080x1920
+      — Fresh render (current code), Jubilee `jlAyWimOVHk` → `data/clips/938f4203-00-v0.mp4`.
+      ffprobe `1080,1920,35.0` (34.96s, in sweet spot). Frame@2s: hook *"respecting someone you
+      disagree with:"* (top, lowercase, legible) + ONE word-caption *"one of the"* ("one" yellow) —
+      no double subtitles. Frame@20s: hook gone (held ~8s ≥7s), still ONE caption set.
+      **Fixed 2 render bugs found here:** (a) a Gemini moment whose start sat near the end of a
+      windowed source cut a **0.31s stub** → added `MIN_CLIP_SEC=12` floor + clamp to real footage
+      in `_vision_candidates` (`clip.py`); (b) heuristic fallback used `max_len=60` → produced a
+      **56.8s clip** → now caps at `MAX_CLIP_SEC=38`. New unit test `test_vision_candidates_clamp_and_floor`; `pytest -q` → 122 green.
 - [ ] **guardrails**: a clip with music / non-`auto-clip` fmt / avoid-list creator is REJECTED
 - [ ] **qc**: auto-approves a transformed clip, rejects a bad one
 - [ ] **distribute** (sandbox/mock, NO live post): posts only top `max_per_run`, marks the rest

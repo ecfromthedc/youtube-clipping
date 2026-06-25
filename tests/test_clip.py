@@ -40,6 +40,26 @@ def test_plan_clips_respects_max_len():
     assert all(c.duration <= 40 for c in cands)
 
 
+def test_vision_candidates_clamp_and_floor(monkeypatch, tmp_path: Path):
+    """A moment whose start sits near the end of the footage must be dropped, not cut to a stub
+    (the 0.31s bug). Good moments survive, clamped to MAX_CLIP_SEC."""
+    from ycp import captions, vision
+    from ycp.vision import Moment
+
+    moments = [
+        Moment(50.0, 80.0, 0.95, "good"),    # 30s — kept (≤38)
+        Moment(170.0, 200.0, 0.9, "tail"),   # clamps to 180 → 10s < MIN_CLIP_SEC → dropped
+        Moment(10.0, 90.0, 0.8, "too long"),  # clamps to 10+38=48 → 38s kept
+    ]
+    monkeypatch.setattr(vision, "enabled", lambda: True)
+    monkeypatch.setattr(vision, "rank_moments", lambda *a, **k: moments)
+    monkeypatch.setattr(captions, "_probe_duration", lambda p: 180.0)
+    cands = clip._vision_candidates(Path("ignored.mp4"), [], max_clips=6)
+    assert len(cands) == 2  # tail moment dropped
+    assert all(c.duration >= clip.MIN_CLIP_SEC for c in cands)
+    assert all(c.duration <= clip.MAX_CLIP_SEC for c in cands)
+
+
 @pytest.mark.skipif(
     not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
     reason="ffmpeg/ffprobe not installed")

@@ -29,6 +29,8 @@ from .transcribe import transcribe
 CLIPS_DIR = ROOT / "data" / "clips"
 MAX_CLIP_SEC = 38.0  # hard cap on a clip window. 2026 health-Shorts data: 20-35s is the
 # retention sweet spot, >45s drops off hard — so we cap short and let the vision picker target 20-35s.
+MIN_CLIP_SEC = 12.0  # floor — a sub-12s clip has no room for hook+payoff. Gemini is told 20-35s, so
+# this only catches pathologies (e.g. a moment whose start sits near the end of a windowed source).
 HOOK_WORDS = {"why", "how", "never", "secret", "nobody", "actually", "truth",
               "mistake", "stop", "biggest", "worst", "best", "everyone", "wrong"}
 
@@ -92,6 +94,33 @@ def _window_text(segments: list[Segment], start: float, end: float) -> str:
     return " ".join(s.text for s in segments if s.end > start and s.start < end).strip()
 
 
+def _vision_candidates(video: Path, segments: list[Segment], max_clips: int) -> list[Candidate]:
+    """Gemini-picked moments, clamped to real footage and floored at MIN_CLIP_SEC.
+
+    A moment whose start sits near the end of the (possibly windowed) source would otherwise cut a
+    near-empty clip — clamp the window to the actual duration and drop anything that can't reach
+    MIN_CLIP_SEC. Empty result → the caller falls back to the transcript heuristic.
+    """
+    if not vision.enabled():
+        return []
+    moments = vision.rank_moments(video, n=max_clips)
+    if not moments:
+        return []
+    src_dur = captions._probe_duration(video)  # 0.0 if probe fails → skip the upper clamp
+    out: list[Candidate] = []
+    for m in moments:
+        start = max(0.0, m.start)
+        end = min(m.end, start + MAX_CLIP_SEC)
+        if src_dur:
+            end = min(end, src_dur)
+        if end - start < MIN_CLIP_SEC:
+            continue  # too short once clamped to actual footage — a malformed clip, skip it
+        out.append(Candidate(start, end, _window_text(segments, start, end), m.score))
+    if out:
+        print(f"  · Gemini vision picked {len(out)} moment(s)")
+    return out
+
+
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
 def download(url: str, workdir: Path, window_sec: int | None = None) -> Path:
@@ -151,15 +180,11 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
         workdir = Path(tmp)
         video = download(url, workdir, window_sec=window_sec)
         segments = transcribe(video, workdir)
-        moments = vision.rank_moments(video, n=max_clips) if vision.enabled() else []
-        if moments:
-            print(f"  · Gemini vision picked {len(moments)} moment(s)")
-            candidates = [Candidate(m.start, min(m.end, m.start + MAX_CLIP_SEC),
-                                    _window_text(segments, m.start,
-                                                 min(m.end, m.start + MAX_CLIP_SEC)),
-                                    m.score) for m in moments]
-        else:
-            candidates = plan_clips(segments, top=max_clips)
+        candidates = _vision_candidates(video, segments, max_clips)
+        if not candidates:  # vision off/unavailable, or every moment too short once clamped
+            # Cap the heuristic fallback at MAX_CLIP_SEC too — the vision path clamps to it, so the
+            # fallback must as well, else a 50-60s window slips through to QC.
+            candidates = plan_clips(segments, max_len=MAX_CLIP_SEC, top=max_clips)
         from . import optimize
         prefer = optimize.preferred_hooks()  # hook styles the loop has learned are winning
         ab = settings().get("ab", {})
