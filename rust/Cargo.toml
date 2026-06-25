@@ -18,6 +18,8 @@ serde_json = "1"
 serde_yaml = "0.9"
 regex = "1"                                              # SRT timestamp parse + blank-line split (mirrors Python `re`)
 rusqlite = { version = "0.31", features = ["bundled"] }  # bundled = static sqlite, no system dep
+# blocking (mirrors Python `requests`) + rustls so the binary scp's to any machine with no system OpenSSL
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [profile.release]
 lto = true        # lean, fast single binary to ship to teammates

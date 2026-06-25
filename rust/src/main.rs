@@ -4,8 +4,10 @@ mod brief;
 mod captions;
 mod config;
 mod db;
+mod enhance;
 mod experiment;
 mod guardrails;
+mod hooks;
 mod optimize;
 mod scoreboard;
 mod scoring;
@@ -49,6 +51,15 @@ enum Cmd {
     Optimize,
     /// A/B hook winners — top posted variant per experiment (cross-checks experiment.py).
     Experiment,
+    /// Hook agent — deterministic score/safety/best on a moment (cross-checks hooks.py).
+    /// Generation needs DEEPSEEK_API_KEY; with none, `best` is the heuristic fallback.
+    Hook {
+        /// Transcript of the clip moment (also scored directly as a candidate hook).
+        moment: String,
+        /// Channel angle (e.g. finance, debate, agitation); biases scoring.
+        #[arg(default_value = "")]
+        angle: String,
+    },
     /// SRT slice + caption chunking on a file (cross-checks srt.py + captions.py).
     Captions {
         /// Path to an SRT file (e.g. whisper output).
@@ -142,6 +153,14 @@ fn main() -> Result<()> {
                     w.experiment, w.winning_hook, w.winning_views, w.variants, w.margin
                 );
             }
+        }
+        Cmd::Hook { moment, angle } => {
+            // Pipe-delimited, deterministic lines for byte-diffing against hooks.py.
+            println!("score|{:.3}", hooks::score_hook(&moment, &angle));
+            println!("safe|{}", hooks::looks_safe(&moment));
+            let b = hooks::best(&root, &moment, &angle, 6, 10, None, &[]);
+            println!("best_text|{}", b.text);
+            println!("best_type|{}", b.typ);
         }
         Cmd::Captions { srt, start, end } => {
             let text = std::fs::read_to_string(&srt)?;
