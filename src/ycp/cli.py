@@ -109,7 +109,7 @@ def _cmd_clip(args: argparse.Namespace) -> int:
                            source_creator=args.creator, channel=args.channel,
                            hook_cta=args.hook_cta, title=args.title, cta=args.cta,
                            gameplay=Path(args.gameplay) if args.gameplay else None,
-                           angle=args.angle,
+                           angle=args.angle, captions_on=not args.no_captions,
                            window_sec=int(args.window * 60) if args.window else None)
     if not created:
         print("✗ no clips produced (check the URL / yt-dlp / whisper output)")
@@ -178,6 +178,8 @@ def build_parser() -> argparse.ArgumentParser:
     cl.add_argument("--angle", default="", help="hook angle: debate|agitation|finance (tunes the hook agent)")
     cl.add_argument("--title", help="explicit hook title (else hook agent writes one)")
     cl.add_argument("--cta", default="Subscribe for more", help="CTA banner text")
+    cl.add_argument("--no-captions", action="store_true",
+                    help="skip our word-by-word captions (defer to a source that already has them)")
     cl.add_argument("--gameplay", help="path to a gameplay loop to split-screen under clips")
     cl.add_argument("--window", type=float, metavar="MIN",
                     help="only process the first MIN minutes of the source (bounds long podcasts)")

@@ -25,6 +25,12 @@ def test_build_chunks_enforces_min_dwell():
     assert chunks and chunks[0].end - chunks[0].start >= 0.5
 
 
+def test_render_overlay_hook_only_when_no_captions(tmp_path):
+    # RULE #1 defer path: empty chunks → the hook still renders, no second subtitle track.
+    n = captions.render_overlay([], duration=1.0, out_dir=tmp_path / "f", title="big hook", fps=10)
+    assert n == 10 and (tmp_path / "f" / "00000.png").exists()
+
+
 def test_case_helper_lowercases():
     assert captions._case("Dr Mike SAYS", "lower") == "dr mike says"
     assert captions._case("loud", "upper") == "LOUD"

@@ -159,6 +159,7 @@ def run(
                 channel=channel_for(row.get("niche")),
                 hook_cta=hook_cta,
                 angle=angle_for(row.get("niche")),
+                captions_on=not row.get("has_captions", False),  # defer if source has captions
                 db_path=db_path,
             )
             made += len(created)

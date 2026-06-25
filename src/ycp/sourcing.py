@@ -159,6 +159,8 @@ def load_creators(niches_path: Path | None = None) -> list[dict[str, Any]]:
                        else f"https://www.youtube.com/{c['handle']}/videos",
                 "lane": c.get("lane", niche.get("lane_default", "owned")),
                 "niche": niche["name"],
+                # True for creators who burn their own captions → we skip ours (RULE #1).
+                "has_captions": bool(c.get("has_captions", False)),
             })
     return creators
 
@@ -177,7 +179,8 @@ def _source_creator(creator: dict[str, Any], cfg: dict) -> list[dict[str, Any]]:
     # Avoid-list gate (per-video): drop music/casino/licensed-IP titles BEFORE ranking.
     candidates = [c for c in candidates if guardrails.source_allowed(c.get("title", ""))[0]]
     top = rank(candidates, cfg)[: cfg["per_creator"]]
-    return [{**row, "niche": creator["niche"]} for row in top]
+    return [{**row, "niche": creator["niche"],
+             "has_captions": creator.get("has_captions", False)} for row in top]
 
 
 def run(niches_path: Path | None = None, db_path: Path | None = None) -> list[dict[str, Any]]:

@@ -90,14 +90,14 @@ distribution:
   outbox: data/outbox      # the folder Repurpose.io watches (sync to Drive/Dropbox)
 
   # Per-channel hashtags appended to each post's description (keyed by channel slug).
-  # #shorts is the discovery essential; keep the rest tight + niche-relevant (3–5 wins).
+  # Keep it tight — 2-3 that best pair with the niche, applied consistently (Eric's call).
   hashtags:
     default: ["#shorts"]
-    phoenix-protocol: ["#shorts", "#health", "#longevity", "#fitness", "#wellness"]
-    hot-seat: ["#shorts", "#debate", "#podcast", "#hottakes"]
-    money-fights: ["#shorts", "#money", "#finance", "#investing"]
-    crash-out: ["#shorts", "#podcast", "#comedy", "#funny"]
-    boardroom: ["#shorts", "#business", "#entrepreneur", "#mindset"]
+    phoenix-protocol: ["#shorts", "#longevity", "#health"]
+    hot-seat: ["#shorts", "#debate", "#hottakes"]
+    money-fights: ["#shorts", "#money", "#investing"]
+    crash-out: ["#shorts", "#comedy", "#podcast"]
+    boardroom: ["#shorts", "#business", "#mindset"]
 
 platforms: [youtube, tiktok, instagram]
 lanes: [owned]   # owned = YPP asset (Whop cut 2026-06; pure owned-first)

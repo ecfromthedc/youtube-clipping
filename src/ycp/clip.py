@@ -130,7 +130,7 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
         source_creator: str = "unknown", channel: str = "clips",
         hook_cta: bool = True, title: str | None = None, cta: str = "Subscribe for more",
         gameplay: Path | None = None, source_video_id: str | None = None,
-        angle: str = "", window_sec: int | None = None,
+        angle: str = "", window_sec: int | None = None, captions_on: bool = True,
         db_path: Path | None = None) -> list[dict]:
     """Full pipeline: url -> ranked vertical clips with hook title + captions, registered for QC.
 
@@ -138,6 +138,10 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
     captions burned on (`captions.burn_captions`). `title` overrides the per-clip hook for
     all clips; `gameplay` stacks each clip over a looping file (split-screen retention).
     Caption failure is non-fatal — the plain vertical clip still ships.
+
+    RULE #1: never two sets of subtitles. `captions_on=False` (set for sources that already
+    burn their own captions) skips our word-by-word track — the hook still renders — so we
+    defer to the source's captions instead of stacking a second set.
     """
     db.init_db(db_path)
     created: list[dict] = []
@@ -157,7 +161,9 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
             candidates = plan_clips(segments, top=max_clips)
         for i, cand in enumerate(candidates):
             clip_id = f"{vid_hash}-{i:02d}"
-            chunks = captions.build_chunks(slice_and_shift(segments, cand.start, cand.end))
+            # captions_on=False → no chunks → hook renders alone (defer to source's captions).
+            chunks = (captions.build_chunks(slice_and_shift(segments, cand.start, cand.end))
+                      if captions_on else [])
             staged = workdir / f"{clip_id}.mp4"
             try:
                 cut_vertical(video, cand, staged, workdir)

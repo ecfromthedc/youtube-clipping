@@ -9,6 +9,10 @@
 # handle = a YouTube @handle. lane: owned = your YPP transformation channel
 # (the only lane — Whop cut 2026-06; pure owned-first).
 #
+# has_captions: true  — RULE #1 (never two sets of subtitles). Set on any creator who
+# burns their OWN captions into their videos; we then skip our word-by-word track for
+# them (the hook still renders) and defer to theirs. Default (absent) = we add ours.
+#
 # Velocity numbers in `notes` are real (live yt-dlp peak views/hour, 2026-06-22).
 
 niches:

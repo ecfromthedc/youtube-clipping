@@ -189,8 +189,12 @@ def render_overlay(chunks: list[Chunk], duration: float, out_dir: Path, *,
         t = f / fps
         img = Image.new("RGBA", size, (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
+        # The hook (top) is ALWAYS shown during its window — it's a hook, not a subtitle —
+        # and coexists with our captions. RULE #1 (Eric) is about SUBTITLES: never our
+        # word-by-word captions on top of a source that already has its own. That's handled
+        # upstream by skipping caption-burn for captioned sources (chunks == []); here, an
+        # empty chunk list simply means the hook renders with no second subtitle track.
         if title and t < title_dur:
-            # Hook + subtitles share the `case` knob (lower); the hook stays BIG via title_size.
             _draw_title(d, _case(title, cfg["case"]), title_size, int(w * 0.86), w, int(h * 0.10),
                         font_path, stroke)
         ch = next((c for c in chunks if c.start <= t < c.end), None)
