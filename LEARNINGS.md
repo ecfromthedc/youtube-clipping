@@ -26,5 +26,16 @@ channel's videos (YouTube 403'd, but still). → **Fix:** `youtube_ops.delete_vi
 video is on *our* channel before deleting. *Lesson: never trust an external id list for a
 destructive op — confirm ownership against our own API first.*
 
+**Deleted a teammate's scheduled posts on a shared Postiz account.** During a QA loop I saw 16
+new QUEUE posts, *assumed* our loop had leaked them, and bulk-deleted all QUEUE — before checking
+content. They were "Zohran Mamdani" clips scheduled on a *different* integration (Carry the
+Fire / Marc Robinson), not Phoenix Protocol. Nothing was *published*, but 16 of a teammate's
+scheduled posts were removed (no Postiz trash/undo). I violated the rule the entry right above
+this one states. → **Fix / hard rule: every Postiz operation — post AND cleanup — filters to OUR
+integration id only (`cmqsakb8z…` = Phoenix Protocol). NEVER act on QUEUE/posts by state alone on
+a shared account; match the integration first.** Our `distribute` already scopes posting to mapped
+channels; the gap was a manual cleanup script. Any cleanup must take an integration id and refuse
+to touch others. The team's other accounts run independently — we never touch them.
+
 **Team rule:** every fix, optimization, and learning ships to GitHub so all agents/teammates
 inherit it. Update `STATUS.md` (current state) + this file (the why) on anything non-obvious.
