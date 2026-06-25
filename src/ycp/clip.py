@@ -27,7 +27,8 @@ from .srt import Segment, slice_and_shift
 from .transcribe import transcribe
 
 CLIPS_DIR = ROOT / "data" / "clips"
-MAX_CLIP_SEC = 45.0  # hard cap on a clip window (Gemini sometimes returns longer)
+MAX_CLIP_SEC = 38.0  # hard cap on a clip window. 2026 health-Shorts data: 20-35s is the
+# retention sweet spot, >45s drops off hard — so we cap short and let the vision picker target 20-35s.
 HOOK_WORDS = {"why", "how", "never", "secret", "nobody", "actually", "truth",
               "mistake", "stop", "biggest", "worst", "best", "everyone", "wrong"}
 

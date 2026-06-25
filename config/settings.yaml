@@ -77,7 +77,7 @@ distribution:
     # is actually scrolling — Shorts throttle a video if early engagement is weak, so never
     # post into a dead pre-dawn window. 8 PM ET (5 PM PT) is the prime evening slot.
     # NOTE: starting points, not gospel — the `by_hour` timing analysis re-tunes these on real data.
-    posting_times: ["10:00", "14:00", "20:00"]
+    posting_times: ["12:30", "15:00", "20:00"]
     timezone: America/New_York
     # Map each owned channel (CHANNEL-PLAYBOOK.md) -> its Postiz integration id.
     # Get ids from GET /public/v1/integrations; fill in once channels are connected.

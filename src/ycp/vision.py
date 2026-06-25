@@ -25,8 +25,9 @@ _MOMENT_PROMPT = """You are an expert short-form editor for faceless YouTube/Tik
 Watch this video and pick the {n} BEST standalone moments to cut as vertical Shorts.
 
 A great moment: hooks in the first 1-2 seconds, has a clear payoff or emotional/visual peak, is
-quotable, and stands alone without prior context. Prefer 18-45s windows. Avoid intros, ad reads,
-dead air, and anything that needs setup.
+quotable, and stands alone without prior context. Prefer TIGHT 20-35s windows (the retention sweet
+spot — cut to the punch, no runway); never exceed 38s. Avoid intros, ad reads, dead air, and
+anything that needs setup.
 
 Return ONLY JSON:
 {{"moments":[{{"start_sec": <number>, "end_sec": <number>, "score": <0-1 how viral>,
