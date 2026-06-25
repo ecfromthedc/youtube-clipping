@@ -13,7 +13,7 @@ def delete_video(video_id: str) -> bool:
     """Delete ONE YouTube video the channel owns, by id. Returns True on success. Logs it."""
     creds = capture._yt_creds()
     if creds is None:
-        print(f"[yt-delete] no YouTube creds — run scripts/yt_oauth.py")
+        print("[yt-delete] no YouTube creds — run scripts/yt_oauth.py")
         return False
     try:
         from googleapiclient.discovery import build
