@@ -42,7 +42,12 @@ The definition of "flawless" for this build. The Ralph loop works this top-to-bo
       — `distribute.run` on a real temp DB w/ a FAKE adapter (no network), `max_per_run:1`, 3 connected
       + 1 unmapped: `{delivered:1, skipped:2, parked:1, failed:0}`. DB: `phx-best→posted` (highest score),
       `phx-low/phx-mid→skipped`, `money-unmapped→approved` (parked). Plus `pytest tests/test_distribute.py` → 14 green.
-- [ ] **capture**: resolves a Postiz post_id → YouTube videoId + pulls analytics (read-only, real)
+- [x] **capture**: resolves a Postiz post_id → YouTube videoId + pulls analytics (read-only, real)
+      — Live read-only: Postiz `GET /posts` → 200, post_id `cmqswogw405maml0ya9evaaw0` → `releaseURL`
+      `youtube.com/watch?v=Mb9hemTsdi0` (that's `resolve_published`'s source). `_video_id` → `Mb9hemTsdi0`.
+      `_ytdlp_views` → 3 real public views. YT Analytics OAuth (`_yt_creds`) builds + `reports().query
+      channel==MINE` returns headers `[views, estimatedMinutesWatched]`, rows `[[0,0]]` (channel is Day-0,
+      no monetized data yet); per-video rows `[]` → `capture_full_analytics` correctly skips empty. Pull mechanism proven.
 - [ ] **optimize**: produces weights + appends IMPROVEMENT-LOG.md from real data
 - [ ] **milestones**: reads real channel stats, correct progress line, no false crossings
 - [ ] **archive**: a clip lands in the Phoenix Protocol Drive folder
