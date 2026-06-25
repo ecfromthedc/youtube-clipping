@@ -1,9 +1,12 @@
 //! `ycp` — YouTube clipping closed-loop ops (Rust port, in progress).
 //! The Python in ../src/ycp stays the live system until this reaches parity.
+mod archive;
 mod brief;
+mod capture;
 mod captions;
 mod config;
 mod db;
+mod distribute;
 mod enhance;
 mod experiment;
 mod guardrails;
@@ -70,6 +73,22 @@ enum Cmd {
         /// Clip window end, seconds.
         #[arg(default_value_t = 1e9)]
         end: f64,
+    },
+    /// Posting-slot assignment (cross-checks distribute.assign_slots). Pure.
+    Slots {
+        /// How many slots to assign.
+        n: usize,
+        /// IANA timezone (e.g. America/New_York).
+        tz: String,
+        /// Start instant, RFC-3339 (e.g. 2026-06-24T07:00:00-04:00).
+        start: String,
+        /// Posting times, comma-separated HH:MM (e.g. 06:00,12:30,19:00).
+        times: String,
+    },
+    /// Retention-curve signals (cross-checks capture.analyze_retention). Pure.
+    Retention {
+        /// Curve as comma-separated elapsed:watch pairs (e.g. 0:1,0.1:0.6,0.2:0.6,1:0.4).
+        curve: String,
     },
 }
 
@@ -169,6 +188,29 @@ fn main() -> Result<()> {
             // chunks, pipe-delimited, for byte-diffing against captions.py.
             for ch in captions::build_chunks(&sliced, captions::MAX_WORDS, captions::MIN_DWELL) {
                 println!("{:.3}|{:.3}|{}", ch.start, ch.end, ch.text());
+            }
+        }
+        Cmd::Slots { n, tz, start, times } => {
+            let start = chrono::DateTime::parse_from_rfc3339(&start)?;
+            let times: Vec<String> = times.split(',').map(|s| s.trim().to_string()).collect();
+            for slot in distribute::assign_slots(n, &times, &tz, start) {
+                println!("{slot}");
+            }
+        }
+        Cmd::Retention { curve } => {
+            let pts: Vec<(f64, f64)> = curve
+                .split(',')
+                .filter_map(|pair| {
+                    let (e, w) = pair.trim().split_once(':')?;
+                    Some((e.trim().parse().ok()?, w.trim().parse().ok()?))
+                })
+                .collect();
+            match capture::analyze_retention(&pts) {
+                Some(r) => println!(
+                    "{:.3}|{:.1}|{:.1}|{:.2}",
+                    r.hook_retention, r.swipe_away_pct, r.biggest_drop_pct, r.biggest_drop_at
+                ),
+                None => println!("none"),
             }
         }
     }

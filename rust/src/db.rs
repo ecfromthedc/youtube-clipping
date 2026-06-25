@@ -157,15 +157,78 @@ pub fn clips_with_latest_metrics(conn: &Connection) -> Result<Vec<ClipRow>> {
     Ok(rows)
 }
 
-/// Clips ready to post (auto-QC approved or human-approved/scheduled).
+/// Clips approved by QC and not yet posted — the distribution work queue.
+/// Parity with db.py `approved_clips`: status = 'approved' only.
 pub fn approved_clips(conn: &Connection) -> Result<Vec<ClipRow>> {
-    let sql = format!("{CLIP_SELECT} WHERE c.status IN ('approved','scheduled')");
+    clips_by_status(conn, "approved")
+}
+
+/// Clips awaiting manual/auto QC (mirrors db.py `pending_qc_clips`).
+pub fn pending_qc_clips(conn: &Connection) -> Result<Vec<ClipRow>> {
+    clips_by_status(conn, "pending_qc")
+}
+
+/// All clips in one status, joined to latest metrics. (Python does `SELECT *`; the metrics
+/// join is harmless here — consumers read only clip columns.)
+fn clips_by_status(conn: &Connection, status: &str) -> Result<Vec<ClipRow>> {
+    let sql = format!("{CLIP_SELECT} WHERE c.status = ?1");
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map([], row_to_clip)?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let rows = stmt.query_map([status], row_to_clip)?.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
-pub fn set_clip_status(conn: &Connection, clip_id: &str, status: &str) -> Result<()> {
-    conn.execute("UPDATE clips SET status=?1 WHERE clip_id=?2", params![status, clip_id])?;
+/// Update a clip's status, optionally setting extra TEXT columns (post_url, posted_at,
+/// post_id). Field names are static identifiers, not user input. Mirrors db.py `set_clip_status`.
+pub fn set_clip_status(
+    conn: &Connection,
+    clip_id: &str,
+    status: &str,
+    fields: &[(&str, &str)],
+) -> Result<()> {
+    let mut sets = String::from("status = ?");
+    let mut vals: Vec<&str> = vec![status];
+    for (k, v) in fields {
+        sets.push_str(&format!(", {k} = ?"));
+        vals.push(v);
+    }
+    vals.push(clip_id);
+    let sql = format!("UPDATE clips SET {sets} WHERE clip_id = ?");
+    conn.execute(&sql, rusqlite::params_from_iter(vals))?;
+    Ok(())
+}
+
+/// Log a QC decision and flip the clip's status accordingly (mirrors db.py `record_qc`).
+pub fn record_qc(
+    conn: &Connection,
+    clip_id: &str,
+    decision: &str,
+    reviewer: Option<&str>,
+    note: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO qc_log (clip_id, reviewer, decision, note, decided_at) VALUES (?1,?2,?3,?4,?5)",
+        params![clip_id, reviewer, decision, note, now()],
+    )?;
+    let status = if decision == "approve" { "approved" } else { "rejected" };
+    set_clip_status(conn, clip_id, status, &[])
+}
+
+/// One performance snapshot for a clip (mirrors the db.py `insert_metric` row dict).
+#[derive(Debug, Clone, Default)]
+pub struct MetricRow {
+    pub clip_id: String,
+    pub views: i64,
+    pub retention_pct: Option<f64>,
+    pub swipe_away_pct: Option<f64>,
+    pub rpm: Option<f64>,
+    pub ad_revenue: f64,
+}
+
+pub fn insert_metric(conn: &Connection, m: &MetricRow) -> Result<()> {
+    conn.execute(
+        "INSERT INTO metrics (clip_id, captured_at, views, retention_pct, swipe_away_pct, rpm, ad_revenue)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![m.clip_id, now(), m.views, m.retention_pct, m.swipe_away_pct, m.rpm, m.ad_revenue],
+    )?;
     Ok(())
 }
