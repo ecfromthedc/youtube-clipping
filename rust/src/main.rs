@@ -2,6 +2,7 @@
 //! The Python in ../src/ycp stays the live system until this reaches parity.
 mod config;
 mod db;
+mod optimize;
 mod scoring;
 mod util;
 
@@ -25,6 +26,8 @@ enum Cmd {
     Status,
     /// Deterministic scoring rollup — top creators by virality (cross-checks scoring.py).
     Scoreboard,
+    /// Learned source weights + creative preferences (cross-checks optimize.py).
+    Optimize,
 }
 
 fn main() -> Result<()> {
@@ -61,6 +64,17 @@ fn main() -> Result<()> {
                     r.key, r.avg_score, r.avg_views, r.n
                 );
             }
+        }
+        Cmd::Optimize => {
+            let settings = config::load_settings(&root)?;
+            let cfg = scoring::ScoreCfg::from_settings(&settings);
+            let factors = optimize::Factors::from_settings(&settings);
+            let clips = db::clips_with_latest_metrics(&conn)?;
+            let a = scoring::analyze(&clips, &cfg);
+            let weights = optimize::creator_weights(&a, &factors, cfg.scale_q, cfg.kill_q);
+            let (prefer_hooks, prefer_length) = optimize::creative_prefs(&a);
+            println!("learned creator weights: {weights:?}");
+            println!("prefer_hooks: {prefer_hooks:?} · prefer_length: {prefer_length:?}");
         }
     }
     Ok(())

@@ -25,7 +25,8 @@ cd rust && cargo build --release
 | CLI skeleton | cli.py | main.rs | ✅ `init`, `status`, `scoreboard` |
 | scoring (scores, rollups, scale/kill) | scoring.py | scoring.rs | ✅ done — parity-exact |
 | scoreboard / brief (markdown) | scoreboard.py, brief.py | — | ⏳ |
-| optimize / experiment (learning, A/B) | optimize.py, experiment.py | — | ⏳ |
+| optimize (learning weights, creative prefs) | optimize.py | optimize.rs | ✅ done — parity-exact |
+| experiment (A/B winners) | experiment.py | — | ⏳ next |
 | guardrails / srt / captions-chunking | guardrails.py, srt.py, captions.py | — | ⏳ |
 | hooks (score + select; DeepSeek via reqwest) | hooks.py | — | ⏳ |
 | capture / distribute / archive (APIs) | capture.py, distribute.py, archive.py | — | ⏳ |
