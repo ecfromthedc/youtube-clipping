@@ -3,6 +3,7 @@
 mod brief;
 mod config;
 mod db;
+mod experiment;
 mod optimize;
 mod scoreboard;
 mod scoring;
@@ -42,6 +43,8 @@ enum Cmd {
     },
     /// Learned source weights + creative preferences (cross-checks optimize.py).
     Optimize,
+    /// A/B hook winners — top posted variant per experiment (cross-checks experiment.py).
+    Experiment,
 }
 
 fn main() -> Result<()> {
@@ -112,6 +115,18 @@ fn main() -> Result<()> {
             let (prefer_hooks, prefer_length) = optimize::creative_prefs(&a);
             println!("learned creator weights: {weights:?}");
             println!("prefer_hooks: {prefer_hooks:?} · prefer_length: {prefer_length:?}");
+        }
+        Cmd::Experiment => {
+            let settings = config::load_settings(&root)?;
+            let min_views = settings["ab"]["min_views"].as_i64().unwrap_or(1000);
+            let clips = db::clips_with_latest_metrics(&conn)?;
+            for w in experiment::winners(&clips, min_views) {
+                // pipe-delimited for byte-diffing against experiment.py.
+                println!(
+                    "{}|{}|{}|{}|{:.1}",
+                    w.experiment, w.winning_hook, w.winning_views, w.variants, w.margin
+                );
+            }
         }
     }
     Ok(())

@@ -28,6 +28,11 @@ fn group_thousands(s: &str) -> String {
     out
 }
 
+/// Python `f"{n:,}"` — integer with thousands separators. "15000" → "15,000".
+pub fn comma(n: i64) -> String {
+    group_thousands(&n.to_string())
+}
+
 /// Mirror brief.py / scoreboard.py `_money`: `$1,234` for ≥100, `$x.xx` below. Rust `{:.N}`
 /// uses round-half-to-even, matching Python's format rounding.
 pub fn money(x: f64) -> String {

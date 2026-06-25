@@ -26,7 +26,7 @@ cd rust && cargo build --release
 | scoring (scores, rollups, scale/kill) | scoring.py | scoring.rs | ✅ done — parity-exact |
 | scoreboard / brief (markdown) | scoreboard.py, brief.py | scoreboard.rs, brief.rs | ✅ done — parity-exact (byte-identical vs Python on clips.db + demo.db; tabulate "pipe" tables, decimal alignment, `%g`, comma-money all reproduced) |
 | optimize (learning weights, creative prefs) | optimize.py | optimize.rs | ✅ done — parity-exact |
-| experiment (A/B winners) | experiment.py | — | ⏳ next |
+| experiment (A/B winners) | experiment.py | experiment.rs | ✅ done — parity-exact (byte-identical winners vs experiment.py on a synthetic A/B db: sorted groups, runner-up ties, min-views + single-variant skips) |
 | guardrails / srt / captions-chunking | guardrails.py, srt.py, captions.py | — | ⏳ |
 | hooks (score + select; DeepSeek via reqwest) | hooks.py | — | ⏳ |
 | capture / distribute / archive (APIs) | capture.py, distribute.py, archive.py | — | ⏳ |
