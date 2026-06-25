@@ -22,7 +22,7 @@ use crate::srt::{slice_and_shift, Segment};
 use crate::util::round_to;
 use crate::{archive, captions, config, db, enhance, hooks, optimize, reframe, transcribe, vision};
 
-pub const MAX_CLIP_SEC: f64 = 45.0; // hard cap on a clip window
+pub const MAX_CLIP_SEC: f64 = 38.0; // hard cap on a clip window (20-35s sweet spot; matches Python)
 
 fn hook_words() -> &'static HashSet<&'static str> {
     static W: OnceLock<HashSet<&'static str>> = OnceLock::new();
@@ -85,7 +85,8 @@ pub fn plan_clips(segments: &[Segment], min_len: f64, max_len: f64, top: Option<
         if buf.is_empty() {
             return;
         }
-        let (start, end) = (buf[0].start, buf[buf.len() - 1].end);
+        let start = buf[0].start;
+        let end = (buf[buf.len() - 1].end).min(start + max_len); // cap window at max_len (mirror Python)
         if end - start >= min_len {
             let text = buf.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ").trim().to_string();
             let score = score_candidate(&text, end - start);
@@ -284,8 +285,15 @@ fn run_inner(
             })
             .collect()
     } else {
-        plan_clips(&segments, 15.0, 60.0, Some(opts.max_clips))
+        plan_clips(&segments, 15.0, MAX_CLIP_SEC, Some(opts.max_clips))
     };
+
+    // A/B only the SINGLE best moment per source (mirror Python) — gating every hero explodes variants.
+    let top_idx = candidates
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(i, _)| i);
 
     let prefer = optimize::preferred_hooks(&optimize::Paths::new(root));
     let ab = &settings["ab"];
@@ -314,7 +322,7 @@ fn run_inner(
         // Pick the hook set: a manual title, an A/B hero set, or a single best hook.
         let (hook_set, exp_id): (Vec<hooks::Hook>, Option<String>) = if let Some(t) = opts.title {
             (vec![hooks::Hook { text: t.to_string(), typ: "manual".to_string() }], None)
-        } else if ab_enabled && cand.score >= hero_score {
+        } else if ab_enabled && Some(i) == top_idx && cand.score >= hero_score {
             let hs = hooks::variants(root, &cand.text, opts.angle, variants_k, 10, None, &prefer);
             let eid = if hs.len() > 1 { Some(format!("{clip_id}-ab")) } else { None };
             (hs, eid)
