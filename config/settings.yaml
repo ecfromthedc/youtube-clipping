@@ -72,10 +72,12 @@ distribution:
     api_url: https://api.postiz.com/public/v1   # self-hosted: <instance>/public/v1
     token_env: POSTIZ_API_TOKEN                  # key lives in .env / 1Password, never here
     schedule: schedule                           # now | schedule (schedule → space posts across the slots below)
-    # Posting cadence for the owned channels. Approved clips are assigned to the next
-    # free slots in order (today's remaining, then roll to following days). Channel-local
-    # time. 3/day at US health-audience peaks: morning routine, lunch scroll, evening wind-down.
-    posting_times: ["06:00", "12:30", "19:00"]
+    # Posting cadence. Clips assigned to the next free slot (today's remaining, then roll over).
+    # Times chosen so the algorithm's initial test-batch lands when a NATIONAL (ET→PT) audience
+    # is actually scrolling — Shorts throttle a video if early engagement is weak, so never
+    # post into a dead pre-dawn window. 8 PM ET (5 PM PT) is the prime evening slot.
+    # NOTE: starting points, not gospel — the `by_hour` timing analysis re-tunes these on real data.
+    posting_times: ["10:00", "14:00", "20:00"]
     timezone: America/New_York
     # Map each owned channel (CHANNEL-PLAYBOOK.md) -> its Postiz integration id.
     # Get ids from GET /public/v1/integrations; fill in once channels are connected.
