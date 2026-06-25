@@ -245,6 +245,17 @@ def run(db_path: Any = None) -> dict[str, Any]:
         else:
             postable.append(clip)
 
+    # Quality-selection: post only the top-scoring clips this cycle; SKIP the rest so the
+    # approved backlog can't balloon (overproduce → post the best → drop the rest). `max_per_run`
+    # is the per-cycle cap (cold-start small; scales via the scaling ladder). None = post all.
+    postable.sort(key=lambda c: (c.get("score") or 0.0), reverse=True)
+    max_per_run, skipped = cfg.get("max_per_run"), 0
+    if max_per_run is not None and len(postable) > int(max_per_run):
+        for clip in postable[int(max_per_run):]:
+            db.set_clip_status(clip["clip_id"], "skipped", db_path=db_path)
+            skipped += 1
+        postable = postable[:int(max_per_run)]
+
     # Schedule mode → assign each postable clip to the next free posting slot so the
     # channel posts on a steady cadence instead of dumping the whole batch at once.
     slots: list[str] = []
@@ -280,4 +291,4 @@ def run(db_path: Any = None) -> dict[str, Any]:
                            post_id=dest, posted_at=db.now())
         delivered += 1
     return {"enabled": True, "delivered": delivered, "blocked": blocked,
-            "parked": parked, "failed": failed}
+            "parked": parked, "failed": failed, "skipped": skipped}

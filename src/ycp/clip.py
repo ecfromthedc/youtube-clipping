@@ -163,6 +163,9 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
         from . import optimize
         prefer = optimize.preferred_hooks()  # hook styles the loop has learned are winning
         ab = settings().get("ab", {})
+        # A/B only the SINGLE best moment per source (not every hero) — A/B'ing every moment
+        # explodes variant count + floods the post schedule. The top moment earns the test.
+        top_idx = max(range(len(candidates)), key=lambda j: candidates[j].score) if candidates else -1
         for i, cand in enumerate(candidates):
             clip_id = f"{vid_hash}-{i:02d}"
             # captions_on=False → no chunks → hook renders alone (defer to source's captions).
@@ -179,7 +182,8 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
             # clip), or a single best hook. Hero = a top-scoring moment worth testing angles on.
             if title:
                 hook_set, exp_id = [{"text": title, "type": "manual"}], None
-            elif ab.get("enabled", True) and cand.score >= ab.get("hero_score", 0.9):
+            elif (ab.get("enabled", True) and i == top_idx
+                  and cand.score >= ab.get("hero_score", 0.9)):
                 hook_set = hooks.variants(cand.text, angle=angle, prefer_types=prefer,
                                           k=int(ab.get("variants", 3)))
                 exp_id = f"{vid_hash}-{i:02d}-ab" if len(hook_set) > 1 else None
@@ -212,7 +216,7 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
                     "source_creator": source_creator, "channel": channel,
                     "platform": "youtube", "lane": lane, "fmt": "auto-clip",
                     "hook_type": hook["type"], "length_sec": int(cand.duration),
-                    "status": "pending_qc", "post_title": hook["text"],
+                    "score": float(cand.score), "status": "pending_qc", "post_title": hook["text"],
                     "experiment_id": exp_id, "variant": hook["type"] if exp_id else None,
                     "post_url": str(out),  # local preview path until posted
                 }, db_path)

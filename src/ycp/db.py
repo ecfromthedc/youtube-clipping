@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS clips (
     fmt             TEXT,             -- debate-moment | story-payoff | list | reaction ...
     hook_type       TEXT,             -- question | bold-claim | cliffhanger | pattern-interrupt
     length_sec      INTEGER,
-    status          TEXT DEFAULT 'pending_qc',  -- pending_qc|approved|rejected|scheduled|posted
+    score           REAL,             -- moment virality score (Gemini/heuristic) — ranks which to post
+    status          TEXT DEFAULT 'pending_qc',  -- pending_qc|approved|rejected|scheduled|posted|skipped
     post_title      TEXT,             -- the hook (also the YouTube title); burned on the video too
     post_id         TEXT,             -- Postiz post id (resolve → YouTube videoId via GET /posts)
     experiment_id   TEXT,             -- A/B group: hero clip's variants share this id
@@ -103,7 +104,7 @@ def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)  # idempotent CREATE IF NOT EXISTS - every connection has the schema
     # Lightweight idempotent migrations for columns added after a db already existed.
-    for col in ("post_title TEXT", "post_id TEXT", "experiment_id TEXT", "variant TEXT"):
+    for col in ("post_title TEXT", "post_id TEXT", "experiment_id TEXT", "variant TEXT", "score REAL"):
         try:
             conn.execute(f"ALTER TABLE clips ADD COLUMN {col}")
         except sqlite3.OperationalError:
@@ -144,10 +145,10 @@ def insert_clip(row: dict[str, Any], db_path: Path | None = None) -> None:
         conn.execute(
             """INSERT INTO clips
                  (clip_id, source_video_id, source_creator, channel, platform,
-                  lane, fmt, hook_type, length_sec, status, post_title,
+                  lane, fmt, hook_type, length_sec, score, status, post_title,
                   experiment_id, variant, post_url, posted_at, slack_ts, created_at)
                VALUES (:clip_id, :source_video_id, :source_creator, :channel,
-                       :platform, :lane, :fmt, :hook_type, :length_sec,
+                       :platform, :lane, :fmt, :hook_type, :length_sec, :score,
                        COALESCE(:status,'pending_qc'), :post_title,
                        :experiment_id, :variant, :post_url,
                        :posted_at, :slack_ts, :created_at)
@@ -155,7 +156,7 @@ def insert_clip(row: dict[str, Any], db_path: Path | None = None) -> None:
             {
                 "status": None, "source_video_id": None, "source_creator": None,
                 "post_title": None, "experiment_id": None, "variant": None,
-                "post_url": None, "posted_at": None, "slack_ts": None,
+                "score": None, "post_url": None, "posted_at": None, "slack_ts": None,
                 "created_at": now(), **row,
             },
         )

@@ -57,7 +57,8 @@ PLIST
 }
 
 # Content cycle: 05:00 and 13:00 daily (produces clips ahead of the 12:30/15:00/20:00 post slots).
-write_plist "$CONTENT" "autopilot --max-videos 3" \
+# --max-videos 2: overproduce a little; distribution.max_per_run posts only the best, skips the rest.
+write_plist "$CONTENT" "autopilot --max-videos 2" \
 '  <key>StartCalendarInterval</key><array>
     <dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>0</integer></dict>
     <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>

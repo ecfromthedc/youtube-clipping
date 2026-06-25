@@ -67,6 +67,11 @@ distribution:
   # Manual Slack QC (qc.auto: false) is still the publish gate — nothing posts without a ✅.
   enabled: true
   provider: postiz         # postiz (preferred) | repurpose (alternative)
+  # Quality-selection: post only the top-`max_per_run` clips (by score) per cron cycle; the rest
+  # are SKIPPED (dropped, not queued) so the backlog can't balloon. Cold-start = 1 (single best
+  # clip/cycle → ~2/day across the 2 daily cron runs, matching the 1-2/day new-channel research
+  # and draining any backlog). Scales up via the scaling ladder in CONTENT-STRATEGY.md. null = post all.
+  max_per_run: 1
 
   postiz:
     api_url: https://api.postiz.com/public/v1   # self-hosted: <instance>/public/v1
