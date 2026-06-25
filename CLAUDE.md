@@ -1,5 +1,13 @@
 # CLAUDE.md — read this first
 
+> ⛔ **SHARED POSTIZ ACCOUNT — NEVER TOUCH ANOTHER CHANNEL.** This Postiz account is used by the
+> WHOLE TEAM to grow MULTIPLE accounts in parallel. Integrations on it include **Phoenix Protocol
+> (OURS — id `cmqsakb8z0123ml0yd61m7h9g`)**, **Carry the Fire**, and **Marc Robinson** (teammates').
+> Every Postiz operation — posting AND any cleanup/delete — MUST be filtered to **our integration
+> id ONLY**. **NEVER delete or act on Postiz posts by state** (e.g. "delete all QUEUE") — that hits
+> teammates' scheduled content. (2026-06-25: a blind QUEUE purge deleted 16 of a teammate's
+> scheduled posts. It must never happen again.) The team's other accounts run independently.
+
 This file is auto-loaded into every Claude Code session in this repo. It's the 60-second
 orientation. The full cold-start brief is **[HANDOFF.md](HANDOFF.md)** — read it before doing
 real work.

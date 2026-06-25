@@ -1,5 +1,10 @@
 # Status & Plan — YouTube Clipping (Phoenix Protocol)
 
+> ⛔ **SHARED POSTIZ ACCOUNT.** The team grows MULTIPLE accounts on this one Postiz login
+> (Phoenix Protocol = ours, `cmqsakb8z0123ml0yd61m7h9g`; Carry the Fire + Marc Robinson =
+> teammates'). EVERY Postiz op (post + cleanup) filters to OUR integration id only. NEVER delete
+> posts by state. Other accounts run independently — we never touch them.
+
 _Living snapshot. Last updated 2026-06-25, after the first live autonomous cycle + fixes._
 _Read this first for current state; the doc map at the bottom has the detailed plans._
 
