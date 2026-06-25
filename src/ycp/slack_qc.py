@@ -133,6 +133,10 @@ def run_listener(db_path: Path | None = None) -> None:
 
 def post_brief(markdown: str, db_path: Path | None = None) -> None:
     """Drop the weekly Double-Down Brief into the QC channel."""
+    post_message(markdown)
+
+
+def post_message(text: str) -> None:
+    """Post a plain mrkdwn message to the QC channel (briefs, milestone alerts, etc.)."""
     client = _client()
-    channel = env()["slack_qc_channel"]
-    client.chat_postMessage(channel=channel, text=markdown, mrkdwn=True)
+    client.chat_postMessage(channel=env()["slack_qc_channel"], text=text, mrkdwn=True)

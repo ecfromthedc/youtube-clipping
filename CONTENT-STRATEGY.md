@@ -55,6 +55,7 @@ Trending sub-topics: longevity routines, zone-2 cardio, sleep, protein/muscle (m
 ## Monetization
 - 2026 YPP entry tier: **500 subs + 3 public posts/90d → 3M valid Shorts views/90d** (or 3k watch hrs). Full YPP: 1k subs + 4k hrs OR 10M Shorts views/90d.
 - Realistic: **3–6 months** at 2–3/day. Stack AdSense + affiliates (health products in description) + licensing. Owned-first (we hold the YPP asset).
+- **Full onboarding steps + readiness checklist + the transformed-clips eligibility rule → `MONETIZATION.md`.** Progress tracked automatically by `ycp milestones` (daily cron → Slack alert on every threshold up to $15k/mo).
 
 ## Mistakes we don't make
 Dead-window posting (killed 6 AM) · weak first-frame hook / slow open · >45s drag · two subtitle tracks · inconsistent schedule · unsafe YMYL claims (credentialed sources only).

@@ -138,6 +138,20 @@ def _cmd_autopilot(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _cmd_milestones(_: argparse.Namespace) -> int:
+    from . import milestones
+    r = milestones.check()
+    if not r["ok"]:
+        print(f"✗ {r['note']}")
+        return 1
+    print(milestones.progress_line(r["stats"]))
+    if r["new_milestones"]:
+        print("🚨 NEW: " + " · ".join(r["new_milestones"]))
+    else:
+        print("(no new milestones)")
+    return 0
+
+
 def _cmd_clean(_: argparse.Namespace) -> int:
     from . import archive
     n = archive.prune_local()
@@ -179,6 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
     cap.set_defaults(fn=_cmd_capture)
     sub.add_parser("clean", help="delete local files of posted clips (keep data/clips/ lean)"
                    ).set_defaults(fn=_cmd_clean)
+    sub.add_parser("milestones", help="check monetization thresholds + alert Slack on new crossings"
+                   ).set_defaults(fn=_cmd_milestones)
     br = sub.add_parser("brief", help="generate the weekly Double-Down Brief")
     br.add_argument("--post-slack", action="store_true", help="also post to the QC channel")
     br.set_defaults(fn=_cmd_brief)

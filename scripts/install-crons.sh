@@ -16,9 +16,10 @@ PATHENV="$BREW:/usr/bin:/bin:/usr/sbin:/sbin"
 
 CONTENT="com.risingtides.ycp.autopilot"
 WEEKLY="com.risingtides.ycp.weekly-review"
+MILESTONES="com.risingtides.ycp.milestones"
 
 if [[ "${1:-}" == "unload" ]]; then
-  for lbl in "$CONTENT" "$WEEKLY"; do
+  for lbl in "$CONTENT" "$WEEKLY" "$MILESTONES"; do
     launchctl unload "$AGENTS/$lbl.plist" 2>/dev/null || true
     rm -f "$AGENTS/$lbl.plist"
     echo "removed $lbl"
@@ -55,7 +56,7 @@ PLIST
   echo "installed + loaded $label"
 }
 
-# Content cycle: 05:00 and 13:00 daily (produces clips ahead of the 06:00/12:30/19:00 post slots).
+# Content cycle: 05:00 and 13:00 daily (produces clips ahead of the 12:30/15:00/20:00 post slots).
 write_plist "$CONTENT" "autopilot --max-videos 3" \
 '  <key>StartCalendarInterval</key><array>
     <dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>0</integer></dict>
@@ -66,6 +67,12 @@ write_plist "$CONTENT" "autopilot --max-videos 3" \
 write_plist "$WEEKLY" "brief --post-slack" \
 '  <key>StartCalendarInterval</key><dict>
     <key>Weekday</key><integer>0</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer>
+  </dict>'
+
+# Milestone watcher: daily 09:00 → Slack alert on each new monetization threshold (YPP 500/3M, $15k/mo).
+write_plist "$MILESTONES" "milestones" \
+'  <key>StartCalendarInterval</key><dict>
+    <key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer>
   </dict>'
 
 echo "✓ crons installed. Logs → $LOGS/"
