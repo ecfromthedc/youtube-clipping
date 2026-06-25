@@ -213,6 +213,41 @@ pub fn record_qc(
     set_clip_status(conn, clip_id, status, &[])
 }
 
+/// A sourcing-queue row (mirrors the dict `upsert_source_video` writes). status=None → 'queued'.
+#[derive(Debug, Clone, Default)]
+pub struct SourceVideoRow {
+    pub video_id: String,
+    pub creator: String,
+    pub channel_id: Option<String>,
+    pub title: Option<String>,
+    pub url: String,
+    pub views: i64,
+    pub published_at: Option<String>,
+    pub view_velocity: f64,
+    pub lane: String,
+    pub status: Option<String>,
+}
+
+/// Insert/refresh a sourced video (mirrors db.py `upsert_source_video`): on conflict only
+/// views/view_velocity/sourced_at are refreshed, exactly like the Python ON CONFLICT clause.
+pub fn upsert_source_video(conn: &Connection, r: &SourceVideoRow) -> Result<()> {
+    conn.execute(
+        "INSERT INTO source_videos
+             (video_id, creator, channel_id, title, url, views, published_at,
+              view_velocity, lane, status, sourced_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(?10, 'queued'), ?11)
+           ON CONFLICT(video_id) DO UPDATE SET
+             views=excluded.views,
+             view_velocity=excluded.view_velocity,
+             sourced_at=excluded.sourced_at",
+        params![
+            r.video_id, r.creator, r.channel_id, r.title, r.url, r.views,
+            r.published_at, r.view_velocity, r.lane, r.status, now()
+        ],
+    )?;
+    Ok(())
+}
+
 /// One performance snapshot for a clip (mirrors the db.py `insert_metric` row dict).
 #[derive(Debug, Clone, Default)]
 pub struct MetricRow {
