@@ -119,23 +119,64 @@ niches:
         lane: owned
         notes: "ROS 45.2 but CLEAREST WHITE SPACE — Workaholics IP, no official clips channel. ⚠ iHeart-distributed — test Content ID before scaling."
 
-  # ── Channel 4 · Phoenix Protocol — health/fitness/longevity (evergreen, advertiser-safe) ──
+  # ── Channel 4 · Phoenix Protocol — human optimization (evergreen, advertiser-safe) ──
+  # LEAD VEIN (chosen 2026-06-25): protocols + myth-busting — save-bait AND share-bait, all
+  # credentialed experts (monetization-safe). Discipline + longevity + breath/cold = expansion
+  # veins, weighted up as the channel warms. ⚠ handles to confirm on first source run; verify
+  # has_captions per creator on a rendered frame (caption-burners get cropped by reframe).
   - name: health-mythbusting
     lane_default: owned
     creators:
+      # ── LEAD: protocols ──
+      - name: "Andrew Huberman"
+        handle: "@hubermanlab"
+        lane: owned
+        notes: "PROTOCOLS anchor — the #1 health-optimization clip engine. 'Do X for sleep/focus/dopamine.' Heavily clipped → win on framing. Verify has_captions (shorts burn captions; long-form usually clean)."
+      - name: "Peter Attia"
+        handle: "@PeterAttiaMD"
+        lane: owned
+        notes: "PROTOCOLS/longevity MD (The Drive). 'This adds/subtracts years' — save-bait, credentialed, ad-safe."
+      - name: "Rhonda Patrick"
+        handle: "@FoundMyFitness"
+        lane: owned
+        notes: "Protocol/supplement science (FoundMyFitness). Dense, save-bait; longevity audience."
+      # ── LEAD: myth-busting ──
       - name: "Dr Mike Israetel"
         handle: "@RenaissancePeriodization"
         lane: owned
-        notes: "ROS 62.9. #OutOfContextSeries actively encourages clips; meme-able myth-busting."
-      - name: "Bryan Johnson"
-        handle: "@bryanjohnson"
-        lane: owned
-        notes: "ROS 61.1. '$2M/yr to not die' = inherently viral; Netflix tailwind; open-moderate. Clip the persona, not prescriptions."
+        notes: "ROS 62.9. MYTH-BUST core — #OutOfContextSeries actively encourages clips; meme-able."
       - name: "Jeff Nippard"
         handle: "@JeffNippard"
         lane: owned
-        notes: "ROS 58.1. 'Research actually says X' protocol density; advertiser-safe (pro-evidence)."
+        notes: "ROS 58.1. PROTOCOL+myth-bust — 'research actually says X'; advertiser-safe (pro-evidence)."
+      - name: "Layne Norton"
+        handle: "@biolayne1"
+        lane: owned
+        notes: "MYTH-BUST king — 'that supplement/diet is a scam', data-driven takedowns = #1 shareable per research."
+      # ── Longevity support ──
+      - name: "Bryan Johnson"
+        handle: "@bryanjohnson"
+        lane: owned
+        notes: "ROS 61.1. '$2M/yr to not die' persona = viral; Netflix tailwind. Clip the persona, not prescriptions."
       - name: "Dr Gabrielle Lyon"
         handle: "@drgabriellelyon"
         lane: owned
-        notes: "ROS 45.0 but WHITESPACE — 'muscle = organ of longevity' sticky thesis; women's-health/longevity lane open."
+        notes: "ROS 45.0 WHITESPACE — 'muscle = organ of longevity'; women's-health/longevity lane open."
+      # ── Discipline spice + interview firehose (Eric's north-stars) ──
+      # NOTE: David Goggins / Joe Rogan have NO clippable OWN channel (Goggins = IG + podcast-guest;
+      # JRE = Spotify-audio + Content-ID heavy). The discipline/big-name vein surfaces via the
+      # interview feeds below (Modern Wisdom interviews Goggins-types). Don't add a @davidgoggins
+      # handle — it 404s; re-upload/motivation channels are someone else's clips (ineligible).
+      - name: "Modern Wisdom"
+        handle: "@ChrisWillx"
+        lane: owned
+        notes: "Chris Williamson INTERVIEWS all of the above (Huberman/Attia/Goggins-adjacent) — one feed, many experts = high clip yield. Verify has_captions (clips burn captions)."
+      # ── EXPANSION veins — weight up as the channel warms ──
+      - name: "Rich Roll"
+        handle: "@richroll"
+        lane: owned
+        notes: "EXPANSION (transformation/endurance/midlife mindset). Long-form interviews; plant-based + discipline."
+      - name: "Wim Hof"
+        handle: "@wimhofmethod"
+        lane: owned
+        notes: "EXPANSION (breath/cold/recovery). 'Reset your nervous system' — strong hook, niche but loyal."
