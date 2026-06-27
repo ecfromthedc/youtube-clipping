@@ -115,7 +115,8 @@ def _cmd_clip(args: argparse.Namespace) -> int:
                            hook_cta=args.hook_cta, title=args.title, cta=args.cta,
                            gameplay=Path(args.gameplay) if args.gameplay else None,
                            angle=args.angle, captions_on=not args.no_captions,
-                           window_sec=int(args.window * 60) if args.window else None)
+                           window_sec=int(args.window * 60) if args.window else None,
+                           start_sec=int(args.start * 60) if args.start else 0)
     if not created:
         print("✗ no clips produced (check the URL / yt-dlp / whisper output)")
         return 1
@@ -124,6 +125,24 @@ def _cmd_clip(args: argparse.Namespace) -> int:
         print(f"  · {c['clip_id']}  {c['len']}s  score {c['score']}  “{c['preview']}…”")
     print("\nNext: `ycp qc-post` to send them to Slack for approval.")
     return 0
+
+
+def _cmd_goldmine(args: argparse.Namespace) -> int:
+    from . import goldmine
+    peaks, title = goldmine.run(args.url, top=args.top)
+    md = goldmine.render_md(args.url, peaks, title)
+    print(md)
+    out = ROOT / "data" / "goldmine.md"
+    out.write_text(md)
+    print(f"✓ {len(peaks)} rewatch peaks · written to {out}")
+    if args.cut and peaks:
+        from . import clip as clip_mod
+        print(f"\n→ cutting the top {min(args.cut, len(peaks))} peak(s)…")
+        for p in peaks[:args.cut]:
+            clip_mod.run(args.url, max_clips=1, source_creator=args.creator,
+                         channel=args.channel, start_sec=int(p.start),
+                         window_sec=p.window_sec, title=args.title)
+    return 0 if peaks else 1
 
 
 def _cmd_autopilot(args: argparse.Namespace) -> int:
@@ -222,8 +241,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="skip our word-by-word captions (defer to a source that already has them)")
     cl.add_argument("--gameplay", help="path to a gameplay loop to split-screen under clips")
     cl.add_argument("--window", type=float, metavar="MIN",
-                    help="only process the first MIN minutes of the source (bounds long podcasts)")
+                    help="process a MIN-minute slice of the source (bounds long podcasts)")
+    cl.add_argument("--start", type=float, metavar="MIN", default=0,
+                    help="start the slice MIN minutes in (skip the cold-open montage; target deep gold). "
+                         "Pair with --window, e.g. --start 42 --window 8")
     cl.set_defaults(fn=_cmd_clip)
+    gm = sub.add_parser("goldmine",
+                        help="find a video's most-rewatched moments (YouTube heatmap + subs)")
+    gm.add_argument("url", help="source video URL")
+    gm.add_argument("--top", type=int, default=5, help="how many rewatch peaks to surface (default 5)")
+    gm.add_argument("--cut", type=int, metavar="N", default=0,
+                    help="also auto-cut the top N peaks into clips")
+    gm.add_argument("--creator", default="unknown", help="source creator label (with --cut)")
+    gm.add_argument("--channel", default="ai-frontier", help="target channel label (with --cut)")
+    gm.add_argument("--title", help="hook title for the cut clips (with --cut)")
+    gm.set_defaults(fn=_cmd_goldmine)
     sb = sub.add_parser("scoreboard", help="Race to $15K — the gamified game state")
     sb.add_argument("--demo", action="store_true", help="render from demo data")
     sb.set_defaults(fn=_cmd_scoreboard)

@@ -82,3 +82,12 @@ def test_cut_vertical_produces_1080x1920(tmp_path: Path):
         capture_output=True, text=True, check=True,
     ).stdout.strip()
     assert dims == "1080,1920"  # reframed to 9:16
+
+
+def test_section_builder():
+    """_section: start offset + window → yt-dlp section string; no window → to end."""
+    from ycp.clip import _section
+    assert _section(0, 30) == "*0-30"
+    assert _section(2520, 480) == "*2520-3000"   # --start 42 --window 8 (minutes→sec)
+    assert _section(600, None) == "*600-inf"
+    assert _section(0, None) == "*0-inf"

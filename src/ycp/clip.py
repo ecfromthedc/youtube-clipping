@@ -123,12 +123,22 @@ def _vision_candidates(video: Path, segments: list[Segment], max_clips: int) -> 
 
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
-def download(url: str, workdir: Path, window_sec: int | None = None) -> Path:
+def _section(start_sec: int, window_sec: int | None) -> str:
+    """yt-dlp --download-sections value. Pure + tested. `*START-END`, or `*START-inf` to the
+    end when no window is given. The gold in a 90-min interview is deep in the episode, so we
+    must be able to start past the cold-open montage, not only grab the first N seconds."""
+    end = f"{start_sec + window_sec}" if window_sec else "inf"
+    return f"*{start_sec}-{end}"
+
+
+def download(url: str, workdir: Path, window_sec: int | None = None,
+             start_sec: int = 0) -> Path:
     out = workdir / "source.mp4"
     cmd = ["yt-dlp", "-f", "mp4/best", "-o", str(out)]
-    if window_sec:
-        # Bound long sources (podcasts): grab only the first window_sec seconds.
-        cmd += ["--download-sections", f"*0-{int(window_sec)}", "--force-keyframes-at-cuts"]
+    if window_sec or start_sec:
+        # Bound long sources (podcasts): grab [start_sec, start_sec+window_sec]. The downloaded
+        # file starts at ~0, so transcript/vision/cut timestamps stay chunk-relative downstream.
+        cmd += ["--download-sections", _section(start_sec, window_sec), "--force-keyframes-at-cuts"]
     cmd.append(url)
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
     if out.exists():
@@ -156,12 +166,26 @@ def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path) ->
     return reframe.reframe(trimmed, out_path, workdir, mode=mode)
 
 
+def _prefer_on_camera(video: Path, candidates: list[Candidate], keep: int,
+                      min_cov: float = 0.5) -> list[Candidate]:
+    """Keep the best `keep` candidates, preferring windows where the speaker is on camera.
+    Candidates are score-ranked; we promote the face-covered ones and only fall back to
+    slide/b-roll windows if nothing has a face (a pure-slide talk degrades gracefully)."""
+    if len(candidates) <= keep or settings().get("reframe", {}).get("mode", "face") != "face":
+        return candidates[:keep]
+    covered, bare = [], []
+    for c in candidates:
+        (covered if reframe.face_coverage(video, c.start, c.end) >= min_cov else bare).append(c)
+    ranked = covered + bare          # face-present first, each group already score-ordered
+    return ranked[:keep]
+
+
 def run(url: str, max_clips: int = 6, lane: str = "owned",
         source_creator: str = "unknown", channel: str = "clips",
         hook_cta: bool = True, title: str | None = None, cta: str = "Subscribe for more",
         gameplay: Path | None = None, source_video_id: str | None = None,
-        angle: str = "", window_sec: int | None = None, captions_on: bool = True,
-        db_path: Path | None = None) -> list[dict]:
+        angle: str = "", window_sec: int | None = None, start_sec: int = 0,
+        captions_on: bool = True, db_path: Path | None = None) -> list[dict]:
     """Full pipeline: url -> ranked vertical clips with hook title + captions, registered for QC.
 
     Every clip gets the DeepSeek hook title (the highest-leverage lever) and opus-style
@@ -178,13 +202,18 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
     vid_hash = hashlib.sha1(url.encode()).hexdigest()[:8]
     with tempfile.TemporaryDirectory(prefix="ycp-clip-") as tmp:
         workdir = Path(tmp)
-        video = download(url, workdir, window_sec=window_sec)
+        video = download(url, workdir, window_sec=window_sec, start_sec=start_sec)
         segments = transcribe(video, workdir)
-        candidates = _vision_candidates(video, segments, max_clips)
+        # Over-generate candidates, then prefer windows where the SPEAKER is on camera — a
+        # talk that cut to a full-screen slide (or b-roll) has no face to follow and reframes
+        # to the slide, not the person. Gate added 2026-06-27 after a Karpathy clip sat on a slide.
+        n_pick = max(max_clips, 6)
+        candidates = _vision_candidates(video, segments, n_pick)
         if not candidates:  # vision off/unavailable, or every moment too short once clamped
             # Cap the heuristic fallback at MAX_CLIP_SEC too — the vision path clamps to it, so the
             # fallback must as well, else a 50-60s window slips through to QC.
-            candidates = plan_clips(segments, max_len=MAX_CLIP_SEC, top=max_clips)
+            candidates = plan_clips(segments, max_len=MAX_CLIP_SEC, top=n_pick)
+        candidates = _prefer_on_camera(video, candidates, max_clips)
         from . import optimize
         prefer = optimize.preferred_hooks()  # hook styles the loop has learned are winning
         ab = settings().get("ab", {})

@@ -38,7 +38,7 @@ transcribe:
   # whisper.cpp is the default engine (3–5x faster). Falls back to openai-whisper
   # automatically if no whisper.cpp binary is found. Run scripts/setup-whisper.sh once.
   binary:   # whisper-cli (auto-detected if blank); or set WHISPER_CPP_BIN
-  model: models/ggml-base.en.bin   # GGML model; relative to repo root or absolute
+  model: models/ggml-small.en.bin  # GGML model; small.en = cleaner captions than base.en (worth ~2x time)
   language: en
   openai_model: small              # only used by the openai-whisper fallback
 
@@ -118,10 +118,15 @@ vision:
   model: gemini-3.5-flash
 
 # --- Reframe (vertical crop) -------------------------------------------------
-# face = OpenCV face-pan crop that follows the speaker (best for talking heads);
-# center = static center crop. Falls back to center whenever no face is found.
+# face = DNN face-pan crop that follows the speaker (YuNet detector — handles profiles/
+#   angles/small faces; falls back to the Haar cascade, then a centre crop when truly faceless).
+# center = static centre crop.
+# identity_lock: in a 2-cam interview, embed faces with SFace and follow the MOST-PRESENT
+#   person (the featured guest) across host/guest cuts, instead of whoever's biggest per frame.
+#   Needs assets/models/face_recognition_sface_2021dec.onnx (bundled). false → largest-face.
 reframe:
   mode: face
+  identity_lock: true
 
 # --- Captions / hook styling -------------------------------------------------
 # case:     subtitle case — lower | upper (the hook title stays uppercase).
