@@ -90,7 +90,8 @@ The **format is the path**; these five steps are how an agent *walks it and impr
   (`autopilot.angle_for` → tunes the hook prompt + scorer to the comfort-zone register)
 - **Clip from — SPINE (embodiers, own clean channels):** `@richroll` (addict→ultra = the phoenix
   story) · `@wimhofmethod` · `@ShawnRyanShow` (rock-bottom→rebuilt) · `@TomBilyeu` · `@EdMylettShow`
-  (max-effort motivation). **Firehose:** `@ChrisWillx` (Goggins-types appear as GUESTS).
+  (max-effort motivation) · `@garyvee` (hustle/self-belief, *encourages* clips). **Firehose:**
+  `@ChrisWillx` (Goggins-types appear as GUESTS).
   **Credibility garnish:** `@RenaissancePeriodization` · `@JeffNippard` · `@biolayne1` · `@bryanjohnson`.
 - **The format (your path):** the line that hits your chest → the turn → "you can do hard things."
   Clip for the screenshot-the-quote moment, not the training-notebook moment.

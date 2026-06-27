@@ -70,10 +70,6 @@ niches:
         handle: "@AlexHormozi"
         lane: owned
         notes: "ROS 67.6 (Cycle 2). 9,713 views/hr — huge velocity; 258K median; business/MMO monologues; clip-tolerated. Saturated, so win on speed."
-      - name: "Gary Vaynerchuk"
-        handle: "@garyvee"
-        lane: owned
-        notes: "ROS 55.4 (Cycle 2). *Explicitly encourages clipping* = top compliance; business/keynote quote-bait; high RPM."
 
   # ── Channel 5 · Boardroom — business/mindset authority (#1 source: Diary of a CEO) ──
   - name: business-finance
@@ -154,6 +150,10 @@ niches:
         handle: "@EdMylettShow"
         lane: owned
         notes: "ROS 43.4. SPINE — scream-at-camera max-effort motivation = Shorts-native, the literal motivational-speaker register Eric wants. Mostly Shorts-led; clip the long-form."
+      - name: "Gary Vaynerchuk"
+        handle: "@garyvee"
+        lane: owned
+        notes: "ROS 55.4. SPINE — hustle/self-belief keynote motivation ('you have more time than you think'). *Explicitly encourages clipping* = top compliance, lowest takedown risk on the channel. Moved from Money Fights 2026-06-27: his clippable gold is motivation, not finance-conflict."
       # ── INTERVIEW FIREHOSE: where the big-name discipline guests surface ──
       # David Goggins / Joe Rogan have NO clippable OWN channel (Goggins = IG + podcast-guest;
       # JRE = Spotify-audio + Content-ID). Don't add a @davidgoggins handle — it 404s and
