@@ -127,6 +127,20 @@ def _cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_notes(args: argparse.Namespace) -> int:
+    from . import notes
+    folder = ROOT / "data" / "clips" / args.folder
+    found = notes.collect(folder) if folder.exists() else []
+    if not found:
+        print(f"(no notes in {args.folder}/ — attach one by renaming a clip "
+              f"'<id> -- your note.mp4' or via Finder ⌘I → Comments)")
+        return 0
+    print(f"📝 {len(found)} noted clip(s) in {args.folder}/:")
+    for cid, note, _ in found:
+        print(f"  {cid}  →  {note}")
+    return 0
+
+
 def _cmd_goldmine(args: argparse.Namespace) -> int:
     from . import goldmine
     peaks, title = goldmine.run(args.url, top=args.top)
@@ -246,6 +260,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="start the slice MIN minutes in (skip the cold-open montage; target deep gold). "
                          "Pair with --window, e.g. --start 42 --window 8")
     cl.set_defaults(fn=_cmd_clip)
+    nt = sub.add_parser("notes", help="list operator review-notes attached to clips (filename ' -- ' or Finder comment)")
+    nt.add_argument("--folder", default="unusable", help="clips subfolder to scan (default unusable)")
+    nt.set_defaults(fn=_cmd_notes)
     gm = sub.add_parser("goldmine",
                         help="find a video's most-rewatched moments (YouTube heatmap + subs)")
     gm.add_argument("url", help="source video URL")
