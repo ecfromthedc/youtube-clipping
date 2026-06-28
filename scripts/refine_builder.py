@@ -18,26 +18,6 @@ sys.path.insert(0, str(ROOT / "src"))
 from ycp import notes, refine          # noqa: E402
 
 QUEUE = ROOT / "data" / "clips" / ".refine-queue"
-
-
-def _time_to_sec(s: str) -> float:
-    """'2:14' / '1:50:00' / '134' -> seconds."""
-    s = s.strip()
-    if ":" in s:
-        sec = 0.0
-        for part in s.split(":"):
-            sec = sec * 60 + float(part or 0)
-        return sec
-    return float(s or 0)
-
-
-def _meta(clip: Path, cid: str) -> dict:
-    """The clip's meta sidecar (creator/hook/length), if present."""
-    p = clip.parent / "meta" / f"{cid}.json"
-    try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):
-        return {}
 MAGENTA, YELLOW, DIM, RESET = "\033[95m", "\033[93m", "\033[90m", "\033[0m"
 
 # type -> prompt. start/end take a signed nudge ('2 earlier'/'1 later'); rest take guidance text.
@@ -62,22 +42,12 @@ def main() -> int:
     if prov and prov["post_title"]:
         print(f"{DIM}  hook: {prov['post_title']}{RESET}")
 
-    # No stored source? Offer the paste-the-link salvage (backlog clips cut before provenance).
-    pin = None
+    # No stored source = a pre-provenance backlog clip. NEVER ask the operator for a URL — that's
+    # the machine's job. It can't be re-cut, so don't waste their time: say so and close.
     if not prov or prov["source_url"] is None:
-        meta = _meta(clip, cid)
-        print(f"{DIM}  ⚠ no stored source for this clip (predates provenance). Paste the source "
-              f"link to make it re-cuttable, or Enter to skip.{RESET}")
-        url = input("  source URL → ").strip()
-        if url:
-            start = _time_to_sec(input("  start time in the video (m:ss or seconds) → "))
-            length = float(meta.get("length_sec") or 30)
-            pin = {"url": url, "start": start, "end": start + length,
-                   "creator": meta.get("source_creator"), "title": meta.get("hook"),
-                   "channel": meta.get("channel")}
-            print(f"  {MAGENTA}✓{RESET} pinned {url.split('=')[-1]} @ {start:.0f}-{start + length:.0f}s\n")
-        else:
-            print(f"{DIM}  skipped — send will fail without a source.{RESET}\n")
+        print(f"{DIM}  no source on file for this old clip — it can't be re-cut. Skip it; the "
+              f"pipeline makes fresh clips (with source baked in) far faster than salvaging this.{RESET}\n")
+        return 1
     print()
 
     ops: list[dict] = []
@@ -111,10 +81,7 @@ def main() -> int:
             print(f"{DIM}  ? pick 1-5, s, or q.{RESET}")
 
     QUEUE.mkdir(parents=True, exist_ok=True)
-    job = {"clip_id": cid, "file": str(clip), "ops": ops}
-    if pin:
-        job["pin"] = pin
-    (QUEUE / f"{cid}.json").write_text(json.dumps(job))
+    (QUEUE / f"{cid}.json").write_text(json.dumps({"clip_id": cid, "file": str(clip), "ops": ops}))
     print(f"\n{MAGENTA}▶ SENT{RESET} — {len(ops)} op(s) queued: "
           f"{', '.join(o['type'] for o in ops)}.  Watch the dashboard.\n")
     return 0
