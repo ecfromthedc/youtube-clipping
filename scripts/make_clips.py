@@ -63,7 +63,11 @@ def _on_topic(src: dict, roster: set[str]) -> bool:
     return True
 LOG = ROOT / "data" / "clips" / ".make-clips.log"
 PEAKS_PER_SOURCE = 3
-FALLBACK_WINDOW_MIN = 12                             # no heatmap → scan the first 12 min
+FALLBACK_WINDOW_MIN = 8                              # no heatmap → scan the first 8 min (faster)
+# Short-form AI-news creators: tiny videos = fast download+transcribe = clips land in ~2 min.
+# Do these FIRST so progress is visible immediately, before the long 2-hour podcasts.
+SHORT_FORM = {"Matthew Berman", "Wes Roth", "AI Explained", "bycloud", "Theo (t3.gg)",
+              "ThePrimeagen"}
 
 _lock = threading.Lock()
 _made = 0
@@ -120,6 +124,7 @@ def cut(job: dict) -> None:
 def main() -> int:
     roster = _roster()
     srcs = [s for s in source_queue(limit=200) if _on_topic(s, roster)]
+    srcs.sort(key=lambda s: s["creator"] not in SHORT_FORM)   # short-form AI-news first (fast wins)
     if not srcs:
         log(f"no on-topic ({CHANNEL}) sources in the queue — run `ycp source` first.")
         return 1

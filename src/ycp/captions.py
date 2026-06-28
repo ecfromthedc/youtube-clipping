@@ -153,28 +153,26 @@ def split_words(seg: Segment) -> list[Word]:
     ]
 
 
-def _breaks_after(text: str, group_len: int) -> bool:
-    """Whether a chunk should flush after this word — break on natural syntax boundaries so
-    captions read as phrases, not arbitrary 3-word slices. Strong terminal/clause punctuation
-    (.!?;:) always breaks; a comma breaks only once the chunk has >=2 words (no orphan 'well,')."""
-    last = text.rstrip("\"')]}")[-1:]   # ignore trailing quotes/brackets
-    if last in ".!?;:":
-        return True
-    return last == "," and group_len >= 2
+def _breaks_after(text: str) -> bool:
+    """Flush a chunk only at a SENTENCE end (. ! ?). Sentence boundaries fall on a real speech
+    pause, so grouping there reads as phrases AND stays on-time. We deliberately do NOT break on
+    commas — mid-phrase splits add tiny chunks that each hit min_dwell and drift behind the audio
+    (timing > grammar). The max_words cap still bounds everything else."""
+    return text.rstrip("\"')]}")[-1:] in ".!?"
 
 
 def build_chunks(segments: list[Segment], max_words: int = MAX_WORDS,
                  min_dwell: float = MIN_DWELL) -> list[Chunk]:
-    """Group words into <=max_words chunks that break on phrase/clause boundaries (punctuation),
-    non-overlapping, each held >= min_dwell. Falls back to a hard max_words cap when a run of
-    words has no punctuation, so captions never exceed max_words on screen."""
+    """Group words into <=max_words chunks, non-overlapping, each held >= min_dwell. Chunks track
+    real word timestamps; we only flush early on a sentence end (a natural pause), so phrasing
+    never costs sync."""
     words = [w for seg in segments for w in split_words(seg)]
     chunks: list[Chunk] = []
     cursor = 0.0
     grp: list[Word] = []
     for w in words:
         grp.append(w)
-        if len(grp) >= max_words or _breaks_after(w.text, len(grp)):
+        if len(grp) >= max_words or _breaks_after(w.text):
             start = max(grp[0].start, cursor)
             end = max(grp[-1].end, start + min_dwell)
             chunks.append(Chunk(round(start, 3), round(end, 3), tuple(grp)))
