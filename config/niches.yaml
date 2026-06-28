@@ -238,6 +238,42 @@ niches:
         handle: "@t3dotgg"
         lane: owned
         notes: "Lowest-risk dev creator. Talking-head, cross-posts everywhere. 'We all fell for it' / 'vibe coding is for seniors' — spicy contrarian, debate-pairable."
+      # ── DIFFUSION — branch OUT from the seed voices: the independent AI-commentary layer +
+      # founder pods that interview the same people. Talking-head / no-music / clip-tolerant, so
+      # they widen the net beyond the named roster without raising Content-ID risk. Sourcing
+      # resolves handles live and skips any that 404, so a stale handle just drops out.
+      - name: "Matthew Berman"
+        handle: "@matthew_berman"
+        lane: owned
+        notes: "DIFFUSION. Daily AI-news talking-head; reacts to the same Altman/Dario/OpenAI beats with his own framing. No music, fully clip-tolerant."
+      - name: "Wes Roth"
+        handle: "@WesRoth"
+        lane: owned
+        notes: "DIFFUSION. AI-news commentary on the frontier-lab drama; punchy bold-claim hooks. Talking-head, low risk."
+      - name: "AI Explained"
+        handle: "@aiexplained-official"
+        lane: owned
+        notes: "DIFFUSION. Measured, high-credibility analysis of new models/papers — quotable 'the benchmark everyone missed' moments. No music."
+      - name: "bycloud"
+        handle: "@bycloudAI"
+        lane: owned
+        notes: "DIFFUSION. Research-explainer voice (younger/dev audience); surfaces the names your roster doesn't cover. Talking-head."
+      - name: "No Priors"
+        handle: "@NoPriorsPod"
+        lane: owned
+        notes: "DIFFUSION. Sarah Guo + Elad Gil (on the roster) interview founders/researchers — same orbit, fresh guests. Clip-tolerant, minimal music."
+      - name: "BG2 Pod"
+        handle: "@bg2pod"
+        lane: owned
+        notes: "DIFFUSION. Gurley + Gerstner on AI economics/capex; the Altman 'snaps on revenue' moment came from here. Bold finance-of-AI hooks."
+      - name: "Machine Learning Street Talk"
+        handle: "@MachineLearningStreetTalk"
+        lane: owned
+        notes: "DIFFUSION. Deep researcher interviews (the skeptic/contrarian end — good debate foils to your doomer clips). Talking-head, no music."
+      - name: "a16z"
+        handle: "@a16z"
+        lane: owned
+        notes: "DIFFUSION. Andreessen (roster) + a rotating founder bench; builder-optimist counterweight to the doom lane. Low risk."
       # ── MEDIUM Content-ID risk — use for the strongest quotes, transform HARD, keep <25s ──
       - name: "TED"
         handle: "@TED"
