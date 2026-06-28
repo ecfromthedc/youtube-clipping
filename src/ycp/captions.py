@@ -92,6 +92,36 @@ def _case(s: str, case: str) -> str:
     return s.lower() if case == "lower" else s.upper()
 
 
+CAP_ZONE_TOP = 0.62      # captions live below this; keep the hook above it
+HOOK_MIN_BAND = 0.16     # a clear band must be at least this tall to hold a 2-line hook
+
+
+def _clear_hook_pos(band: tuple[float, float] | None, default: float) -> float:
+    """Hook centre placed in the biggest clear vertical band: above the face if there's room,
+    else below it (always above the caption zone). Pure — `band` is normalized (y_top, y_bottom)
+    of the face, or None. Falls back to `default`."""
+    if not band:
+        return default
+    y0, y1 = band
+    above_h, below_h = y0 - 0.05, CAP_ZONE_TOP - y1
+    if above_h >= below_h and above_h >= HOOK_MIN_BAND:
+        pos = (0.05 + y0) / 2          # centre the hook in the gap above the face
+    elif below_h >= HOOK_MIN_BAND:
+        pos = (y1 + CAP_ZONE_TOP) / 2  # tuck it between face and captions
+    else:
+        return default                 # no clear band big enough — leave it at the default
+    return max(0.12, min(0.6, pos))
+
+
+def _adaptive_hook_pos(base_clip: Path, default: float) -> float:
+    """Read the clip's first frame, find the face, return a hook position that clears it."""
+    try:
+        from . import reframe
+        return _clear_hook_pos(reframe.face_band(base_clip, t=0.3), default)
+    except Exception:  # noqa: BLE001 — placement is best-effort; never break the render
+        return default
+
+
 @dataclass(frozen=True)
 class Word:
     text: str
@@ -283,7 +313,8 @@ def _draw_title(draw, text: str, size: int, max_w: int, w: int, h: int,
 
 def render_overlay(chunks: list[Chunk], duration: float, out_dir: Path, *,
                    title: str | None = None, size: tuple[int, int] = SIZE,
-                   fps: int = FPS, font_path: str | None = None) -> int:
+                   fps: int = FPS, font_path: str | None = None,
+                   hook_pos: float | None = None) -> int:
     """Render a transparent PNG sequence (00000.png ...) for the clip; return frame count."""
     from PIL import Image, ImageDraw
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -292,6 +323,7 @@ def render_overlay(chunks: list[Chunk], duration: float, out_dir: Path, *,
     stroke = max(6, w // 135)
     n_frames = max(1, math.ceil(duration * fps))
     title_dur = cfg["hook_hold_sec"]
+    pos_frac = cfg["hook_pos"] if hook_pos is None else hook_pos   # adaptive override from caller
     cap_max = int(w * cfg["size_pct"])
     cap_stroke = max(3, w // 300)              # thin outline on captions — they're not in a box
     title_size = int(w * 0.085)                # dead-centre hero hook
@@ -309,7 +341,7 @@ def render_overlay(chunks: list[Chunk], duration: float, out_dir: Path, *,
         if title and t < title_dur:
             _draw_title(d, _case(title, cfg["case"]), title_size, int(w * 0.78), w, h,
                         hook_font, stroke, box=cfg["hook_box"], box_color=cfg["hook_box_color"],
-                        text_color=cfg["hook_text_color"], pos_frac=cfg["hook_pos"],
+                        text_color=cfg["hook_text_color"], pos_frac=pos_frac,
                         max_lines=cfg["hook_max_lines"])
         ch = next((c for c in chunks if c.start <= t < c.end), None)
         if ch:
@@ -337,7 +369,10 @@ def burn_captions(base_clip: Path, chunks: list[Chunk], out_path: Path, workdir:
     """Render caption frames and overlay them onto base_clip with ffmpeg (no libass needed)."""
     duration = _probe_duration(base_clip) or (max((c.end for c in chunks), default=0.0) + 0.5)
     frames = workdir / "capframes"
-    render_overlay(chunks, duration, frames, title=title, size=size, fps=fps, font_path=font_path)
+    # Place the hook clear of the speaker's face (read from the first frame), not at a fixed height.
+    hook_pos = _adaptive_hook_pos(base_clip, _caption_cfg()["hook_pos"]) if title else None
+    render_overlay(chunks, duration, frames, title=title, size=size, fps=fps,
+                   font_path=font_path, hook_pos=hook_pos)
     tmp_out = workdir / "captioned.mp4"
     cmd = [
         "ffmpeg", "-y", "-i", str(base_clip),

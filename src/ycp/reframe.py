@@ -289,6 +289,34 @@ def first_face_time(video: Path, start: float, end: float, max_skip: float = 4.0
     return start
 
 
+def face_band(video: Path, t: float = 0.3) -> tuple[float, float] | None:
+    """Normalized (y_top, y_bottom) of the largest face at time `t`, or None if no face/cv2.
+    Used to place the hook in clear space instead of over the speaker's face."""
+    try:
+        import cv2
+    except ImportError:
+        return None
+    det = _yunet()
+    if det is None:
+        return None
+    cap = cv2.VideoCapture(str(video))
+    if t:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
+    ok, frame = cap.read()
+    cap.release()
+    if not ok or frame is None:
+        return None
+    h, w = frame.shape[:2]
+    det.setInputSize((w, h))
+    _, faces = det.detect(frame)
+    if faces is None or not len(faces):
+        return None
+    f = max(faces, key=lambda r: float(r[2]) * float(r[3]))   # largest face
+    y0 = max(0.0, float(f[1]) / h)
+    y1 = min(1.0, (float(f[1]) + float(f[3])) / h)
+    return (y0, y1)
+
+
 def _smooth(vals: list[float], win: int = 5) -> list[float]:
     out = []
     for i in range(len(vals)):

@@ -60,3 +60,15 @@ def test_render_overlay_writes_transparent_frames(tmp_path):
     from PIL import Image
     im = Image.open(first)
     assert im.mode == "RGBA" and im.size == captions.SIZE
+
+
+def test_clear_hook_pos_places_above_or_below_face():
+    # face in the upper-middle → hook goes ABOVE it (small fraction), clear of the face
+    p = captions._clear_hook_pos((0.30, 0.45), default=0.34)
+    assert p < 0.30 and abs(p - 0.175) < 1e-6
+    # face high near the top → no room above → hook tucks BELOW it (above caption zone)
+    p2 = captions._clear_hook_pos((0.05, 0.22), default=0.34)
+    assert 0.22 < p2 < captions.CAP_ZONE_TOP
+    # no face, or a face so big no band fits → fall back to default
+    assert captions._clear_hook_pos(None, 0.34) == 0.34
+    assert captions._clear_hook_pos((0.10, 0.60), 0.34) == 0.34
