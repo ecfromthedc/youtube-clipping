@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Refinement loop — watch data/clips/unusable/ and auto-fix NOTED clips.
 #
-# Flow: operator drops a clip in unusable/ and attaches a note (rename '<id> -- why.mp4',
-# or Finder ⌘I → Comments) → fswatch fires → a headless Claude agent reads the note,
-# re-sources a real talking-head moment, re-cuts via `ycp clip` (auto-framed + QC-gated),
-# and the good result lands in unreviewed/. The old broken clip is removed on success.
+# Flow: drop ONE clip in unusable/ → TextEdit opens with a note template → write why it's
+# bad → Cmd+S → a headless Claude agent re-sources a real talking-head moment, re-cuts via
+# `ycp clip` (auto-framed + QC-gated), and the good result lands in unreviewed/.
 #
-# Guardrails:
-#   - ONLY clips that carry a note are processed (a note = the operator's "fix this + why").
-#   - A ledger (.refine-ledger) records every attempted clip so unfixable ones aren't retried
-#     forever — delete a line from it to allow a re-try.
-#   - A lock dir prevents concurrent agent runs.
-#   - The agent runs headless and uses tokens — this is operator-started, never auto-loaded.
+# Safe by design:
+#   - Clips ALREADY in the folder at startup are baselined as "seen" — NO editor opens for them
+#     (this is the bug that spammed before). Only clips dropped AFTER startup pop an editor, once.
+#   - A clip gets exactly one editor (its `.note.txt` sidecar marks it seen; orphan sidecars are
+#     removed safely when their video leaves).
+#   - Only clips with a real (non-template) note are sent to the agent; a ledger blocks retries;
+#     a lock prevents concurrent agent runs. Operator-started; uses tokens per refine.
 #
-# Start:  bash scripts/refine-watch.sh        (Ctrl-C to stop)
+# Use:  empty unusable/ first if you like, then:  bash scripts/refine-watch.sh   (Ctrl-C stops)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -25,53 +25,67 @@ mkdir -p "$WATCH"; touch "$LEDGER"
 command -v fswatch >/dev/null || { echo "✗ fswatch not found (brew install fswatch)"; exit 1; }
 command -v claude  >/dev/null || { echo "✗ claude CLI not found"; exit 1; }
 
-refine() {
-  # 0) clean orphan note sidecars (their clip was already refined away)
+_id() { local b; b="$(basename "$1" .mp4)"; printf '%s' "${b%% -- *}"; }
+
+cleanup_orphans() {   # remove .note.txt whose video is gone — safe (no glob-error deletes)
   for sc in "$WATCH"/*.note.txt; do
     [ -e "$sc" ] || continue
-    cid="$(basename "$sc" .note.txt)"
-    ls "$WATCH/$cid".mp4 "$WATCH/$cid "*.mp4 >/dev/null 2>&1 || rm -f "$sc"
+    local cid hit=""; cid="$(basename "$sc" .note.txt)"
+    for m in "$WATCH"/*.mp4; do [ -e "$m" ] || continue; [ "$(_id "$m")" = "$cid" ] && { hit=1; break; }; done
+    [ -n "$hit" ] || rm -f "$sc"
   done
-  # 1) fresh drop with no note yet → create a sidecar + pop open TextEdit for the operator
-  for mp4 in "$WATCH"/*.mp4; do
-    [ -e "$mp4" ] || continue
-    base="$(basename "$mp4" .mp4)"
-    case "$base" in *" -- "*) continue ;; esac          # already noted via filename suffix
-    sc="$WATCH/$base.note.txt"
-    if [ ! -f "$sc" ]; then
-      printf '# Why is this clip wrong? Write your note below, then press Cmd+S to refine.\n# e.g. "shows the interviewer not the guest" / "hook not related" / "cuts off before the point"\n\n' > "$sc"
-      open -e "$sc"
-      echo "$(date '+%T') opened note editor for $base" | tee -a "$LOG"
-    fi
+}
+
+baseline() {          # mark every CURRENT clip seen WITHOUT opening an editor (no startup spam)
+  for m in "$WATCH"/*.mp4; do
+    [ -e "$m" ] || continue
+    case "$(basename "$m")" in *" -- "*) continue ;; esac
+    local sc="$WATCH/$(_id "$m").note.txt"; [ -f "$sc" ] || : > "$sc"
   done
-  # 2) any clip with a now-non-empty note, not yet attempted? run the agent over them.
+}
+
+open_new_editors() {  # a clip with no sidecar = newly dropped → template + ONE TextEdit
+  for m in "$WATCH"/*.mp4; do
+    [ -e "$m" ] || continue
+    case "$(basename "$m")" in *" -- "*) continue ;; esac
+    local sc="$WATCH/$(_id "$m").note.txt"
+    [ -f "$sc" ] && continue
+    printf '# Why is this clip wrong? Write your note here, then press Cmd+S.\n# e.g. "shows the interviewer, not the guest" / "hook not related" / "cuts off before the point"\n\n' > "$sc"
+    open -e "$sc"
+    echo "$(date '+%T') note editor opened → $(_id "$m")" | tee -a "$LOG"
+  done
+}
+
+refine() {            # clips with a real note, not yet attempted → run the agent once
   local pending
   pending=$(.venv/bin/python -m ycp notes 2>/dev/null | sed -n 's/^  \([^ ]*\)  →.*/\1/p' \
             | grep -vxF -f "$LEDGER" || true)
   [ -z "$pending" ] && return 0
-  if ! mkdir "$LOCK" 2>/dev/null; then echo "$(date '+%T') busy, skip" >>"$LOG"; return 0; fi
+  mkdir "$LOCK" 2>/dev/null || { echo "$(date '+%T') busy, will retry" >>"$LOG"; return 0; }
   trap 'rmdir "$LOCK" 2>/dev/null || true' RETURN
   echo "$(date '+%T') refining: $(echo "$pending" | tr '\n' ' ')" | tee -a "$LOG"
-  claude -p "You are the refinement loop for the AI-news clip factory at $ROOT (already cwd).
-The operator dropped broken clips into data/clips/unusable/ each with a NOTE saying what's wrong.
-Run '.venv/bin/python -m ycp notes' to list them. For EACH noted clip below, fix it:
+  claude -p "Refinement loop for the AI-news clip factory at $ROOT (cwd). The operator dropped
+broken clip(s) into data/clips/unusable/ with a NOTE saying what's wrong. Run
+'.venv/bin/python -m ycp notes' to read them, then fix EACH of these clip ids:
 $pending
-Per clip: (1) read its note — that's why it's bad; (2) delete the old clip (file in
-data/clips/unusable/ + its DB row); (3) re-source a clip where the SUBJECT is a close-up
-talking head actually saying the point (use the note's guidance; WebSearch / 'ycp goldmine <url>'
-to find the moment; NEVER Joe Rogan/JRE); (4) re-cut: .venv/bin/python -m ycp clip \"<url>\"
---max 1 --start <MIN> --window <MIN ~1.2> --creator \"<who>\" --channel ai-frontier --title \"<hook>\"
-— the pipeline auto-frames, trims, and QC-gates; (5) confirm it routed to data/clips/unreviewed/.
-Max 2 cut attempts per clip. Be concise." \
-    --dangerously-skip-permissions >>"$LOG" 2>&1 || echo "$(date '+%T') agent error" >>"$LOG"
-  # mark every pending clip as attempted (so failures don't loop)
-  echo "$pending" >> "$LEDGER"
-  echo "$(date '+%T') done" >>"$LOG"
+Per clip: (1) read its note (why it's bad); (2) delete the old clip + its .note.txt sidecar +
+its DB row; (3) re-source a clip where the SUBJECT is a close-up talking head actually saying
+the point (use the note; WebSearch / 'ycp goldmine <url>' to find the moment; NEVER Joe
+Rogan/JRE); (4) re-cut: .venv/bin/python -m ycp clip \"<url>\" --max 1 --start <MIN>
+--window <~1.2> --creator \"<who>\" --channel ai-frontier --title \"<hook>\" (auto-frames,
+trims, QC-gates); (5) confirm it routed to data/clips/unreviewed/. Max 2 attempts per clip.
+Be concise." --dangerously-skip-permissions >>"$LOG" 2>&1 || echo "$(date '+%T') agent error" >>"$LOG"
+  echo "$pending" >> "$LEDGER"     # mark attempted so failures don't loop
+  echo "$(date '+%T') done" | tee -a "$LOG"
 }
 
-echo "👀 watching $WATCH for noted clips… (Ctrl-C to stop)  log: $LOG"
-refine                                   # process anything already noted at startup
+echo "👀 watching $WATCH — drop ONE clip, note it in TextEdit, Cmd+S.  (Ctrl-C to stop)  log: $LOG"
+cleanup_orphans
+baseline                                   # existing clips: seen, no editor
+refine                                     # process anything already noted via filename suffix
 fswatch -o "$WATCH" | while read -r _; do
-  sleep 2                                # debounce Finder's multi-event writes
+  sleep 2                                  # debounce Finder's burst of write events
+  cleanup_orphans
+  open_new_editors
   refine
 done
