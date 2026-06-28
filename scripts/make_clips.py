@@ -17,12 +17,50 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+import yaml                                          # noqa: E402
+
 from ycp import clip as clip_mod, goldmine          # noqa: E402
 from ycp.db import source_queue                      # noqa: E402
 
 TARGET = int(sys.argv[1]) if len(sys.argv) > 1 else 20
 CHANNEL = "ai-frontier"
 CAP = 3                                              # parallel cuts (whisper/opencv/ffmpeg are heavy)
+
+# The source queue holds EVERY channel's roster (comedy/fitness/finance live in niches.yaml too),
+# so scope to this channel's creators — and for broad interviewers who also post off-topic
+# (Diary of a CEO does aliens/billionaire eps, Lex does non-AI guests), require an AI-ish title.
+BROAD = {"Diary of a CEO", "Lex Fridman", "TED", "Dwarkesh Patel", "Y Combinator"}
+AI_TERMS = ("ai", "a.i", "agi", "asi", "gpt", "llm", "openai", "anthropic", "claude", "gemini",
+            "deepmind", "chatgpt", "neural", "robot", "automat", "superintellig", "machine learning",
+            "language model", "artificial intelligence", "singularity", "nvidia", "datacenter",
+            "data center", "agentic", "vibe cod", "coding", "programmer", "software")
+
+
+def _roster() -> set[str]:
+    """Creator names in the ai-frontier group of niches.yaml."""
+    data = yaml.safe_load((ROOT / "config" / "niches.yaml").read_text())
+    found: set[str] = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("name") == CHANNEL and isinstance(node.get("creators"), list):
+                found.update(c.get("name") for c in node["creators"] if isinstance(c, dict))
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(data)
+    return {n for n in found if n}
+
+
+def _on_topic(src: dict, roster: set[str]) -> bool:
+    cr = src["creator"]
+    if cr not in roster:
+        return False
+    if cr in BROAD:
+        return any(k in (src["title"] or "").lower() for k in AI_TERMS)
+    return True
 LOG = ROOT / "data" / "clips" / ".make-clips.log"
 PEAKS_PER_SOURCE = 3
 FALLBACK_WINDOW_MIN = 12                             # no heatmap → scan the first 12 min
@@ -80,11 +118,14 @@ def cut(job: dict) -> None:
 
 
 def main() -> int:
-    srcs = source_queue(limit=60)
+    roster = _roster()
+    srcs = [s for s in source_queue(limit=200) if _on_topic(s, roster)]
     if not srcs:
-        log("no sources in the queue — run `ycp source` first.")
+        log(f"no on-topic ({CHANNEL}) sources in the queue — run `ycp source` first.")
         return 1
-    log(f"mission: {TARGET} clips in our format · {len(srcs)} sources · {CAP} parallel")
+    log(f"mission: {TARGET} {CHANNEL} clips · {len(srcs)} on-topic sources "
+        f"(filtered from the full queue) · {CAP} parallel")
+    log("  sources: " + ", ".join(f"{s['creator']}" for s in srcs[:12]))
     pool = ThreadPoolExecutor(max_workers=CAP)
     seen_urls = set()
     for src in srcs:
