@@ -376,7 +376,7 @@ def reframe(video: Path, out_path: Path, workdir: Path, *, mode: str = "face",
         if zw > w and track:
             # Pan to follow the speaker (at the zoomed scale when zooming). Sparse detections →
             # lock to the median position rather than snapping to dead-centre (which frames the lamp).
-            if sampled and len(track) >= 0.4 * sampled:
+            if sampled and len(track) >= 0.25 * sampled:
                 expr = crop_x_expr(track, zw, crop_w=w)
             else:
                 frac = statistics.median(f for _, f in track)

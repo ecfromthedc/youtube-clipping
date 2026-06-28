@@ -186,12 +186,12 @@ def review_clip(video_path, model: str | None = None) -> dict:
         opens = bool(data.get("opens_on_speaker", False))
         complete = bool(data.get("complete_thought", False))
         framed = bool(data.get("well_framed", False))
-        # CALIBRATED to the operator's manual sort (2026-06-27): usable = the subject is a person
-        # (or mostly-person) AND the clip opens on the speaker. This caught 7/7 of the hand-rejected
-        # clips (never ships a chart/slide/b-roll/wide-tiny/slow-open) while keeping the borderline
-        # ones the operator accepts. Cut-off + occasional wide moments are WARNINGS, not auto-rejects
-        # — Gemini's own strict "usable" flag threw out 13/16 good clips, so we don't trust it raw.
-        usable = subject in ("person", "mixed") and opens
+        # usable = subject is a person (or mostly-person) AND it opens on the speaker AND it's
+        # well framed. The framing gate is NON-NEGOTIABLE (2026-06-28): without it, a crop centred
+        # on the background/wall (the 16:9→9:16 pan missing the speaker) shipped as "usable" because
+        # well_framed was ignored — that's how empty-room clips reached the review pile. Cut-off /
+        # incomplete-thought stay WARNINGS (Gemini over-flags those), but bad framing now rejects.
+        usable = subject in ("person", "mixed") and opens and framed
         warnings = list(data.get("issues") or [])
         if not complete:
             warnings.append("may cut off / incomplete thought")
