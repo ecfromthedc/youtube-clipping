@@ -130,6 +130,31 @@ def _cosine(a, b) -> float:
     return float(a @ b / (na * nb)) if na and nb else 0.0
 
 
+def _is_speech(t: float, segments) -> bool:
+    """True if time `t` (seconds, clip-local) falls inside any transcript segment's [start, end].
+    Trivial scan — pure, so it unit-tests without Whisper. Empty/None segments → False."""
+    if not segments:
+        return False
+    for seg in segments:
+        if seg.start <= t <= seg.end:
+            return True
+    return False
+
+
+def _mouth_motion(prev_gray, cur_gray) -> float:
+    """Mean absolute per-pixel difference between two grayscale mouth crops — a cheap proxy for
+    lip movement. 0.0 when either crop is missing or their shapes differ (an out-of-bounds /
+    resized crop), so a mismatch silently degrades instead of raising. Pure numpy → unit-testable."""
+    import numpy as np
+    if prev_gray is None or cur_gray is None:
+        return 0.0
+    a = np.asarray(prev_gray)
+    b = np.asarray(cur_gray)
+    if a.shape != b.shape or a.size == 0:
+        return 0.0
+    return float(np.abs(b.astype(int) - a.astype(int)).mean())
+
+
 def _dominant_track(records: list[tuple[float, float, object]],
                     sim_thresh: float = IDENTITY_SIM,
                     exclude_embs: list | None = None) -> list[tuple[float, float]]:
@@ -159,6 +184,45 @@ def _dominant_track(records: list[tuple[float, float, object]],
     return sorted(max(pool, key=lambda c: len(c["apps"]))["apps"])
 
 
+def _speaking_track(records: list[tuple[float, float, object, float]],
+                    segments,
+                    sim_thresh: float = IDENTITY_SIM,
+                    exclude_embs: list | None = None) -> list[tuple[float, float]]:
+    """Speech-aware version of `_dominant_track`. records = [(t, center_x_frac, embedding,
+    mouth_motion)]. Clusters by face identity exactly like `_dominant_track`, but ranks clusters
+    by TALKING evidence — sum of mouth-motion on the frames that overlap a Whisper speech interval
+    — instead of raw frame count. That follows whoever is SPEAKING, not merely whoever is on screen
+    the most (which frames the wrong person on reaction shots / two-shots). Falls back to frame
+    count on ties or when no cluster shows any speaking motion. Pure (numpy cosine) → unit-testable."""
+    clusters: list[dict] = []
+    for t, cx, emb, motion in records:
+        best, bi = -1.0, -1
+        for k, c in enumerate(clusters):
+            s = _cosine(c["cent"], emb)
+            if s > best:
+                best, bi = s, k
+        if bi >= 0 and best >= sim_thresh:
+            clusters[bi]["apps"].append((t, cx))
+            clusters[bi]["speak"] += motion if _is_speech(t, segments) else 0.0
+        else:
+            clusters.append({"cent": emb, "apps": [(t, cx)],
+                             "speak": motion if _is_speech(t, segments) else 0.0})
+    if not clusters:
+        return []
+    pool = clusters
+    if exclude_embs:
+        guests = [c for c in clusters
+                  if not any(_cosine(c["cent"], h) >= sim_thresh for h in exclude_embs)]
+        pool = guests or clusters       # if everyone matches a host, don't break — keep all
+    if any(c["speak"] > 0.0 for c in pool):
+        # Rank by speaking evidence; break ties on frame count so it's deterministic.
+        best = max(pool, key=lambda c: (c["speak"], len(c["apps"])))
+    else:
+        # No speech-overlapping motion anywhere → degrade to "most frames wins".
+        best = max(pool, key=lambda c: len(c["apps"]))
+    return sorted(best["apps"])
+
+
 def _probe_dims(video: Path) -> tuple[int, int]:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
@@ -171,13 +235,58 @@ def _probe_dims(video: Path) -> tuple[int, int]:
         return 0, 0
 
 
+def _mouth_crop(frame, f):
+    """Grayscale crop of the mouth region (lower third of the YuNet/Haar face box `f` =
+    [x, y, w, h, ...]) from a BGR frame. None if cv2 is missing or the crop is out of bounds /
+    empty — so the caller's motion score silently degrades to 0.0. Thin cv2 wrapper."""
+    try:
+        import cv2
+    except ImportError:
+        return None
+    x, y, w, h = float(f[0]), float(f[1]), float(f[2]), float(f[3])
+    y0 = int(round(y + 0.6 * h))
+    y1 = int(round(y + h))
+    x0 = int(round(x))
+    x1 = int(round(x + w))
+    H, W = frame.shape[:2]
+    x0, x1 = max(0, x0), min(W, x1)
+    y0, y1 = max(0, y0), min(H, y1)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return None
+    crop = frame[y0:y1, x0:x1]
+    if crop.size == 0:
+        return None
+    try:
+        return cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _nearest_mouth(prev_mouths: list, cx: float, tol: float = 0.08):
+    """From the previous sampled frame's [(cx_frac, gray_crop)], return the crop whose center-x is
+    closest to `cx` (same person, roughly same position across frames), or None if none is within
+    `tol` of the frame width. Pure position match — keeps `_mouth_motion` comparing like with like."""
+    best, bd = None, tol
+    for pcx, pgray in prev_mouths:
+        d = abs(pcx - cx)
+        if d <= bd:
+            best, bd = pgray, d
+    return best
+
+
 def face_track(video: Path, sample_fps: float = 3.0, min_face_frac: float = 0.06,
-               max_faces: int = 2) -> tuple[list[tuple[float, float]], int, float, float]:
+               max_faces: int = 2, segments=None,
+               ) -> tuple[list[tuple[float, float]], int, float, float]:
     """Sample the video; return (x_track, n_sampled, median_face_height_frac, median_face_y_frac).
     x_track = [(t_sec, face_center_x_fraction)] for the featured speaker (identity-locked when SFace
     is on). The geometry (median face height + y as fractions of frame height) lets the caller zoom
     in on a speaker who's small in a wide shot. Uses YuNet (DNN) when available, else the Haar
-    cascade. ([], 0, 0.0, 0.5) if OpenCV is unavailable (caller then centers the crop)."""
+    cascade. ([], 0, 0.0, 0.5) if OpenCV is unavailable (caller then centers the crop).
+
+    When `segments` (clip-local Whisper Segments) is supplied AND SFace is on, the featured person
+    is chosen by ACTIVE SPEECH — mouth-motion on frames that overlap a speech interval — via
+    `_speaking_track`, so we follow whoever is TALKING, not merely whoever is on screen most. With
+    no segments (or when motion can't be computed) it silently degrades to `_dominant_track`."""
     try:
         import cv2
     except ImportError:
@@ -196,7 +305,10 @@ def face_track(video: Path, sample_fps: float = 3.0, min_face_frac: float = 0.06
     min_px = max(40, int(min_face_frac * width))
     track: list[tuple[float, float]] = []            # largest-face-per-frame (no SFace)
     records: list[tuple[float, float, object]] = []  # (t, cx_frac, embedding) for identity-lock
+    motions: list[float] = []                        # mouth-motion score, index-aligned to records
     geoms: list[tuple[float, float]] = []            # (height_frac, y_center_frac) of kept faces
+    speech_aware = rec is not None and bool(segments)  # active-speaker mode needs SFace + segments
+    prev_mouths: list[tuple[float, object]] = []      # last sampled frame's [(cx_frac, gray_crop)]
     sampled, i = 0, 0
     while True:
         ok, frame = cap.read()
@@ -218,23 +330,39 @@ def face_track(video: Path, sample_fps: float = 3.0, min_face_frac: float = 0.06
             biggest = max(rows, key=lambda r: float(r[2]) * float(r[3]))
             geoms.append((float(biggest[3]) / height,
                           (float(biggest[1]) + float(biggest[3]) / 2) / height))
+            cur_mouths: list[tuple[float, object]] = []
             if rec is not None:
                 # Embed each face → identity-lock resolves the featured person after the scan.
                 for f in rows:
                     cx = (float(f[0]) + float(f[2]) / 2) / width
+                    # Mouth-motion (active-speaker signal): crop the lower third of the face box,
+                    # grayscale it, diff vs the SAME position's crop in the previous sampled frame.
+                    motion = 0.0
+                    if speech_aware:
+                        cur_gray = _mouth_crop(frame, f)
+                        if cur_gray is not None:
+                            cur_mouths.append((cx, cur_gray))
+                            prev_gray = _nearest_mouth(prev_mouths, cx)
+                            motion = _mouth_motion(prev_gray, cur_gray)
                     try:
                         emb = rec.feature(rec.alignCrop(frame, f.reshape(1, -1)))
                         records.append((t, cx, emb))
+                        motions.append(motion)
                     except Exception:  # noqa: BLE001  (alignment can fail on edge crops)
                         track.append((t, cx))  # still usable for the largest-face fallback
             else:
                 track.append((t, (float(biggest[0]) + float(biggest[2]) / 2) / width))
+            prev_mouths = cur_mouths
         i += 1
     cap.release()
     fh_med = statistics.median([h for h, _ in geoms]) if geoms else 0.0
     y_med = statistics.median([y for _, y in geoms]) if geoms else 0.5
     if rec is not None and records:
-        return _dominant_track(records, exclude_embs=_host_embeddings()), sampled, fh_med, y_med
+        hosts = _host_embeddings()
+        if speech_aware and any(m > 0.0 for m in motions):
+            recs4 = [(t, cx, emb, m) for (t, cx, emb), m in zip(records, motions)]
+            return _speaking_track(recs4, segments, exclude_embs=hosts), sampled, fh_med, y_med
+        return _dominant_track(records, exclude_embs=hosts), sampled, fh_med, y_med
     return track, sampled, fh_med, y_med
 
 
@@ -364,15 +492,19 @@ def crop_x_expr(track: list[tuple[float, float]], scaled_w: int,
 
 
 def reframe(video: Path, out_path: Path, workdir: Path, *, mode: str = "face",
-            size: tuple[int, int] = (TARGET_W, TARGET_H)) -> Path:
+            size: tuple[int, int] = (TARGET_W, TARGET_H), segments=None) -> Path:
     """Scale to target height and crop a 9:16 window — face-following (mode='face') or static
-    center (mode='center', a narrow source, or no faces). Raises RuntimeError on ffmpeg fail."""
+    center (mode='center', a narrow source, or no faces). Raises RuntimeError on ffmpeg fail.
+
+    `segments` = clip-local Whisper Segments; when supplied, face-tracking picks the ACTIVE
+    SPEAKER (mouth-motion vs speech intervals) rather than the most-present face. Optional —
+    without it the reframe behaves exactly as before."""
     import statistics
     w, h = size
     sw, sh = _probe_dims(video)
     face_vf = None
     if mode == "face" and sh:
-        track, sampled, fh_med, y_med = face_track(video)
+        track, sampled, fh_med, y_med = face_track(video, segments=segments)
         # Zoom when the speaker's face is small (a wide stage shot) so they fill the vertical
         # frame instead of standing tiny in the middle. We scale UP by `zoom` then crop, which
         # makes the face occupy ~ZOOM_TARGET_FH of the output height.

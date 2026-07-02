@@ -158,10 +158,15 @@ def download(url: str, workdir: Path, window_sec: int | None = None,
 # transcribe() now lives in transcribe.py (whisper.cpp default, openai-whisper fallback)
 
 
-def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path) -> Path:
+def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path,
+                 segments: list[Segment] | None = None) -> Path:
     """Trim the candidate window, then reframe to a 9:16 vertical that follows the speaker
     (OpenCV face-pan, falling back to a center crop). Captions are composited afterward by
-    `captions.burn_captions` (this ffmpeg has no libass/freetype text filters)."""
+    `captions.burn_captions` (this ffmpeg has no libass/freetype text filters).
+
+    When `segments` (the full transcript) is supplied, the window is sliced + shifted to clip-local
+    time and handed to reframe so face-tracking can lock onto the ACTIVE SPEAKER (mouth-motion vs
+    speech), not just the most-present face. Optional — omit it for the prior most-present behavior."""
     trimmed = workdir / "trim.mp4"
     cmd = ["ffmpeg", "-y", "-i", str(video), "-ss", str(cand.start), "-t", str(cand.duration),
            "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-preset", "veryfast", str(trimmed)]
@@ -169,7 +174,8 @@ def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path) ->
     if proc.returncode != 0 or not trimmed.exists():
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()[-400:]}")
     mode = settings().get("reframe", {}).get("mode", "face")
-    return reframe.reframe(trimmed, out_path, workdir, mode=mode)
+    local_segs = slice_and_shift(segments, cand.start, cand.end) if segments else None
+    return reframe.reframe(trimmed, out_path, workdir, mode=mode, segments=local_segs)
 
 
 def _prefer_on_camera(video: Path, candidates: list[Candidate], keep: int,
@@ -310,7 +316,7 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
                       if captions_on else [])
             staged = workdir / f"{clip_id}.mp4"
             try:
-                cut_vertical(video, cand, staged, workdir)
+                cut_vertical(video, cand, staged, workdir, segments=segments)
             except (RuntimeError, FileNotFoundError) as exc:
                 print(f"  ! skip {clip_id}: {exc}")
                 continue
