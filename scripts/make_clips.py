@@ -19,10 +19,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 import yaml                                          # noqa: E402
 
-from ycp import clip as clip_mod, goldmine          # noqa: E402
-from ycp.db import source_queue                      # noqa: E402
+from ycp import clip as clip_mod, goldmine, sourcing  # noqa: E402
+from ycp.db import clipped_source_ids, source_queue   # noqa: E402
 
-TARGET = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+_args = sys.argv[1:]
+REFRESH = "--no-refresh" not in _args                # skip the ~2-3 min re-source with --no-refresh
+_nums = [a for a in _args if a.isdigit()]
+TARGET = int(_nums[0]) if _nums else 20
 CHANNEL = "ai-frontier"
 CAP = 3                                              # parallel cuts (whisper/opencv/ffmpeg are heavy)
 
@@ -111,6 +114,7 @@ def cut(src: dict) -> None:
         created = clip_mod.run(
             job["url"], max_clips=1, source_creator=job["creator"], channel=CHANNEL,
             hook_cta=True, captions_on=True,   # dedup ON (no force) — never remake the same clip
+            source_video_id=src["video_id"],   # record provenance so future runs skip this video
             start_sec=int(job["start_min"] * 60), window_sec=int(job["window_min"] * 60))
     except Exception as e:  # noqa: BLE001 — one bad source must not kill the mission
         log(f"✗ {job['creator']} @ {job['start_min']:.1f}m: {e}")
@@ -127,11 +131,19 @@ def cut(src: dict) -> None:
 
 
 def main() -> int:
+    if REFRESH:                                    # the missing step: refresh before reading the queue
+        log("refreshing source queue (ycp source)…")
+        try:
+            sourcing.run()
+        except Exception as e:  # noqa: BLE001 — a stale queue still beats no run
+            log(f"  source refresh failed ({e}); using existing queue")
     roster = _roster()
-    srcs = [s for s in source_queue(limit=200) if _on_topic(s, roster)]
+    clipped = clipped_source_ids()                 # skip videos we already clipped (across runs)
+    srcs = [s for s in source_queue(limit=200)
+            if _on_topic(s, roster) and s["video_id"] not in clipped]
     srcs.sort(key=lambda s: s["creator"] not in FOUNDER_VC)   # founders & VCs first
     if not srcs:
-        log(f"no on-topic ({CHANNEL}) sources in the queue — run `ycp source` first.")
+        log(f"no fresh on-topic ({CHANNEL}) sources in the queue — run `ycp source` first.")
         return 1
     log(f"mission: {TARGET} {CHANNEL} clips · {len(srcs)} on-topic sources "
         f"(filtered from the full queue) · {CAP} parallel")
