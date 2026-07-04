@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -124,6 +125,24 @@ def _vision_candidates(video: Path, segments: list[Segment], max_clips: int) -> 
 
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
+def _run_bounded(cmd: list[str], timeout: int, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """Like subprocess.run(capture_output=True, text=True, timeout=), but on timeout kills the
+    WHOLE process group — not just the direct child. yt-dlp's --download-sections spawns ffmpeg;
+    a plain timeout kills yt-dlp yet then blocks forever draining the pipe the orphaned ffmpeg
+    still holds (the ~12h hang we hit live). New session + killpg makes the timeout actually
+    terminate the whole tree. Raises subprocess.TimeoutExpired on timeout (caller treats as a
+    failed step and moves on)."""
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          cwd=cwd, start_new_session=True) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)   # kill yt-dlp AND its ffmpeg child
+            out, err = proc.communicate()                     # tree is dead → pipes close, no hang
+            raise subprocess.TimeoutExpired(cmd, timeout, output=out, stderr=err) from None
+        return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
 def _section(start_sec: int, window_sec: int | None) -> str:
     """yt-dlp --download-sections value. Pure + tested. `*START-END`, or `*START-inf` to the
     end when no window is given. The gold in a 90-min interview is deep in the episode, so we
@@ -146,7 +165,10 @@ def download(url: str, workdir: Path, window_sec: int | None = None,
         # file starts at ~0, so transcript/vision/cut timestamps stay chunk-relative downstream.
         cmd += ["--download-sections", _section(start_sec, window_sec), "--force-keyframes-at-cuts"]
     cmd.append(url)
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    try:
+        proc = _run_bounded(cmd, timeout=900)   # group-kill on timeout — plain run() deadlocks here
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"download timed out (>900s) for {url} — skipped") from None
     if out.exists():
         return out
     cands = list(workdir.glob("source*.mp4")) + list(workdir.glob("source*.mkv"))
