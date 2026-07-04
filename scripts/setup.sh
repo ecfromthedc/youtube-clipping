@@ -16,6 +16,7 @@ echo "→ creating venv…"
 echo "→ installing dev tooling + package (non-editable)…"
 uv pip install pytest ruff           # dev tools
 uv pip install . --reinstall-package youtube-clipping   # copy ycp into site-packages
+uv pip install -U yt-dlp             # keep the downloader fresh — a stale yt-dlp silently hangs on YouTube
 
 echo "→ fetching face models (YuNet detect + SFace identity-lock; OpenCV's own, ~40MB)…"
 mkdir -p assets/models
