@@ -67,6 +67,7 @@ def _on_topic(src: dict, roster: set[str]) -> bool:
         return any(k in (src["title"] or "").lower() for k in AI_TERMS)
     return True
 LOG = ROOT / "data" / "clips" / ".make-clips.log"
+LOG.parent.mkdir(parents=True, exist_ok=True)   # fresh checkout/worktree has no data/clips yet
 PEAKS_PER_SOURCE = 3
 FALLBACK_WINDOW_MIN = 8                              # no heatmap → scan the first 8 min (faster)
 MAX_ROUNDS = 8                                       # loop the whole roster up to this many times to
