@@ -1,0 +1,118 @@
+{
+  "video_title": "how i make $36,438/mo posting Youtube Shorts (using AI)",
+  "core_promise": "I'm going to show you exactly how I make over $35,000 every single month posting AI YouTube Shorts.",
+  "workflow_steps": [
+    {
+      "step": 1,
+      "name": "Choose a niche",
+      "detail": "Emphasizes the importance of choosing a niche. Mentions two examples: Roblox Rants (storytelling) and Ranking videos. Suggests checking a previous video for more niche options.",
+      "automation_opportunity": "AI-powered niche trend analysis and suggestion based on viral content across platforms."
+    },
+    {
+      "step": 2,
+      "name": "Channel setup / warmup",
+      "detail": "This step is crucial to avoid getting 'stuck at zero views' or 'shadowbanned'.\n1.  **Warmup**: If using a brand new channel, scroll YouTube Shorts for 30-60 minutes on day 1, liking, commenting, and subscribing to a few random channels. Repeat this for another 30-60 minutes on day 2. If using an aged channel (multiple years old), a warmup is not necessary.\n2.  **Feature Eligibility**: Go to YouTube Studio > Settings > Channel > Feature eligibility. Ensure 'Standard features' are enabled (requires no active Community Guidelines strikes). 'Intermediate features' (custom thumbnails, live streaming, videos >15 mins) are needed for monetization and require phone verification (limited to 2 channels/year per phone number).\n3.  **Branding**: Should take 5-10 minutes. Choose a name relevant to the niche (e.g., 'DailyDoseOfInternetCats'). Generate a profile picture and channel banner (optional) that are relevant to the niche. Write a concise channel description summarizing content, including an email for inquiries and a copyright disclaimer.",
+      "automation_opportunity": "Automated channel creation and basic setup (name, description, profile picture, banner) based on niche. AI-driven 'warmup' activity (scrolling, liking, commenting, subscribing). Automated checks for feature eligibility. AI-generated branding assets (name, profile pic, banner text) and description templates."
+    },
+    {
+      "step": 3,
+      "name": "Make videos with AI",
+      "detail": "This step covers creating viral-optimized content using AI tools.\n1.  **Storytelling Niche (e.g., Roblox Rants)**:\n    *   Find an 'inspiration channel' that is performing well (e.g., 'KittyRants' with 700k subs, 5M views/video). Find a successful video from this channel.\n    *   Copy the video's link and paste it into 'YoutubeToTranscript.com' to get the full transcript. Copy the transcript.\n    *   Use ChatGPT with the prompt: 'Write a similar script in the exact same writing style, length, and tone but about {topic}. Research the video topics and then write the script. Make sure the script is for a youtube short, it's fast paced and straight to the point and in the same writing style as the example script below:' then paste the copied transcript. Replace '{topic}' with your desired video topic (e.g., 'my parents grounded me').\n    *   Copy the new script from ChatGPT and paste it into 'ElevenLabs.io' (a text-to-speech tool). Generate a voiceover, choosing from various voices and adjusting speed.\n    *   Edit the video in CapCut: add Roblox gameplay in the background, overlay captions, and optionally add memes/pictures.\n2.  **Ranking Niche (Fastest Method)**:\n    *   Use ChatGPT with the prompt: 'Give me a list of topics and titles for my next youtube short. My youtube shorts are a ranking format where I rank viral clips from social media. Examples of a ranking topic title would be: \"Ranking Funniest Dogs Ever\" or \"Ranking Best Pranks in History\". Your job is to come up with topics that I can rank.' This generates viral topic ideas.\n    *   Go to 'Viblo.ai' (an AI clipping tool with a 7-day free trial). Select the 'Video Ranking' section.\n    *   Input the video title (e.g., 'Ranking Cutest Cats In History'). Format the title by chopping it into two lines and adding contrasting colors (e.g., white and blue) to make it easier to read quickly. Add a title stroke for visibility.\n    *   Find viral clips on TikTok (or other social media) related to your topic (e.g., search 'cutest cats'). Copy the link of each clip.\n    *   In Viblo.ai, paste the clip links into the 'Videos' sections. Viblo downloads and formats the clips. Adjust video height to leave empty space for the title. Trim clips to use specific engaging parts. Add a title for each individual clip (e.g., 'Cat Vs. Water') and customize its appearance (stroke, text animations).\n    *   Aim for 4-6 clips per ranking video; never less than 4, never more than 6. This is the 'sweet spot' for performance.\n    *   Hit 'Generate' to create the final video.",
+      "automation_opportunity": "AI-powered script generation from a topic and inspiration. Automated voiceover generation. AI-driven clip sourcing from TikTok/other platforms based on topic and virality metrics. Automated video editing (combining clips, adding titles, numbers, animations, background, captions) within an integrated app."
+    },
+    {
+      "step": 3,
+      "name": "Analyze content (so you can go viral FAST)",
+      "detail": "Crucial for understanding video performance and making adjustments.\n1.  **Average View Duration (AVD)**: How long the average person watched the video. For a 17-second video that went viral, the AVD was 21 seconds (meaning people watched the whole video and part of it again). If AVD is low, it indicates poor content (clips, topics) and requires improving clip research or topic selection.\n2.  **Swipe Rate**: Percentage of people who swipe away from your video in the first 4 seconds. A good swipe rate is 20% or less (the example video had 19.7%). A high swipe rate (e.g., 40-50%) indicates bad content or a poor hook. To improve, ensure the first clip of a ranking video is 'insanely engaging' (e.g., a clip that already got millions of views on another platform).",
+      "automation_opportunity": "AI analysis of YouTube Studio analytics (AVD, swipe rate) to provide real-time, specific recommendations for content improvement (e.g., 'replace first 3 seconds of clip X', 'try a different title hook')."
+    }
+  ],
+  "formats_documented": [
+    {
+      "name": "Storytelling Niche (Roblox Rants)",
+      "structure": "Roblox gameplay in the background, text overlay telling a story, optional memes/pictures on top.",
+      "example_topic": "my crush kissed me!",
+      "automation_difficulty": "medium",
+      "notes": "Very simple, high virality potential. Scripting and voiceover are key components."
+    },
+    {
+      "name": "Ranking Niche",
+      "structure": "Video topic title at the top (formatted with contrasting colors and two lines), followed by 4-6 numbered viral clips from social media (TikTok, Instagram). Each clip has its own title.",
+      "example_topic": "Ranking Cutest Cats In History",
+      "automation_difficulty": "easy",
+      "notes": "Described as 'probably one of the most viral niches on all of YouTube Shorts'. Can be produced 'insanely fast' (e.g., 10 minutes per video). Key is selecting engaging clips and formatting the title for quick readability."
+    }
+  ],
+  "tools_used": [
+    {
+      "name": "YouTube",
+      "purpose": "Content consumption, inspiration, analytics (YouTube Studio).",
+      "replaces_with_agentic_app": "partial"
+    },
+    {
+      "name": "YoutubeToTranscript.com",
+      "purpose": "Generate transcripts from YouTube videos.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "ChatGPT",
+      "purpose": "Script writing, topic generation, branding ideas.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "ElevenLabs.io",
+      "purpose": "Text-to-speech voiceovers.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "CapCut",
+      "purpose": "Video editing (gameplay, captions, pictures) for storytelling niche.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "Canva",
+      "purpose": "Channel banner creation.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "TikTok",
+      "purpose": "Sourcing viral clips for ranking videos.",
+      "replaces_with_agentic_app": "no"
+    },
+    {
+      "name": "Viblo.ai",
+      "purpose": "AI video clipping tool, video ranking, automated editing for ranking niche.",
+      "replaces_with_agentic_app": "yes"
+    }
+  ],
+  "data_sources": [
+    "YouTube (inspiration channels, successful shorts)",
+    "ChatGPT (topic ideas, script generation, branding ideas)",
+    "TikTok (viral clips)",
+    "YouTube Studio Analytics (AVD, swipe rate)"
+  ],
+  "publishing_strategy": {
+    "frequency": "Post videos every day on multiple channels.",
+    "timing": "Not explicitly stated beyond 'every day'.",
+    "cross_posting": "Clips are sourced from TikTok/Instagram, but the focus is on YouTube Shorts.",
+    "monetization_stack": "YouTube Partner Program (implied by 'estimated revenue' and 'get monetized on the channel')."
+  },
+  "growth_hacks": [
+    "Replicate successful formats from inspiration channels.",
+    "Warmup new channels by mimicking human activity (scrolling, liking, commenting, subscribing) before posting.",
+    "Prioritize high Average View Duration (AVD) and low Swipe Rate (20% or less) for virality.",
+    "Format titles for quick readability (chopped lines, contrasting colors).",
+    "Use highly engaging clips for the first few seconds of ranking videos.",
+    "Don't overthink branding; focus on content production speed."
+  ],
+  "missing_pieces_for_agentic_app": [
+    "Automated channel creation and setup (including phone verification if needed for intermediate features).",
+    "AI-driven 'warmup' of new channels.",
+    "Automated sourcing of royalty-free/licensed gameplay footage for storytelling.",
+    "Automated sourcing and integration of relevant memes/pictures for storytelling.",
+    "Direct, automated sourcing of viral clips from social media platforms (TikTok, Instagram) with proper attribution and rights management.",
+    "End-to-end video assembly and editing for both formats, including captions, within a single integrated app.",
+    "Automated publishing to YouTube Shorts.",
+    "AI analysis of YouTube Studio analytics to provide specific, actionable content improvement suggestions (e.g., 'replace first 3 seconds of clip X', 'try a different title hook')."
+  ]
+}

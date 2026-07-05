@@ -1,0 +1,141 @@
+{
+  "video_title": "I made $136,192 posting YouTube Shorts (just copy me)",
+  "core_promise": "I'm going to be breaking down exactly how I made over $136,000 in the last six months posting AI YouTube Shorts that literally anyone could create completely without showing their face. Everything you need to know to build a profitable, successful YouTube Shorts channel.",
+  "workflow_steps": [
+    {
+      "step": 1,
+      "name": "Choose a niche",
+      "detail": "Emphasizes speed: \"You need to choose a niche quickly, do it today, and get started. Money loves speed.\" (1:22-1:25). States that even competitive/saturated niches can work if you're good at making videos. It's important but not something to spend weeks on.",
+      "automation_opportunity": "AI-driven niche trend analysis and suggestion based on viral content patterns and monetization potential."
+    },
+    {
+      "step": 2,
+      "name": "Channel setup / warmup",
+      "detail": "If you have an 'aged channel' (multiple years old), use it for a 'better trust score' with YouTube. If not, 'warmup' a new channel: Day 1: spend about an hour scrolling YouTube Shorts, liking videos, and subscribing to a few channels (not necessarily in your niche) to appear as a 'real person' (6:35-7:07). Day 2: Set up channel branding. Branding should be 'insanely fast,' 'in 10 minutes' (7:23-7:26). Use ChatGPT for channel name/profile picture ideas and Canva for banner design (8:12-8:26).",
+      "automation_opportunity": "Automated channel setup (name, banner, profile pic generation based on niche). AI-driven simulated user engagement for channel 'warmup' (liking, subscribing, watching shorts)."
+    },
+    {
+      "step": 3,
+      "name": "Make videos with AI",
+      "detail": "Two methods are presented for creating content, both leveraging AI tools.",
+      "automation_opportunity": "Full automation of script generation, voiceover, and initial video assembly. Advanced AI for clip sourcing, intelligent trimming, and complex editing."
+    },
+    {
+      "step": 3.1,
+      "name": "Method 1: Recreate viral content in 20 seconds",
+      "detail": "1. Find an example channel in your niche (e.g., OFFSCIPT for movie content). 2. Identify 'outlier' videos that performed exceptionally well (e.g., 3M views vs. 1M average). 3. Copy the link of the outlier video. 4. Go to YouTubeToTranscript.com and paste the link to get the video's transcript. 5. Use ChatGPT with the prompt: 'Write a similar script in the exact same writing style, length, and tone but about {topic}. Research the video topics and then write the script. Make sure the script is for a YouTube short, it's fast paced and straight to the point and in the same writing style as the example script below:' (10:55-11:19). Paste the original transcript below the prompt. 6. Copy the new, original script from ChatGPT. 7. Go to ElevenLabs.io (Text to Speech) and paste the script to generate a voiceover. 8. Find relevant clips (e.g., from movies, TV shows, games) to match the script's specific points. 9. Edit everything together using CapCut, adding captions and sound effects.",
+      "automation_opportunity": "Automated outlier detection, transcript fetching, AI script generation, AI voiceover generation. AI-powered clip sourcing, intelligent trimming, and CapCut integration for automated editing."
+    },
+    {
+      "step": 3.2,
+      "name": "Method 2: Automated content using Viblo",
+      "detail": "1. Go to Viblo.ai (offers a 7-day free trial). 2. Select the 'Video Ranking' feature. 3. Find viral ranking video topics on TikTok (e.g., searching 'ranking animals'). 4. Find 5-6 viral clips (with millions of views) on TikTok related to the chosen topic. 5. Copy the TikTok links. 6. Paste the links into Viblo, which downloads them without watermarks. 7. Trim each clip to use only the most engaging 4-5 second segments. 8. Set the main video title (recommended two lines, with one or two words highlighted for visual appeal). 9. Add sound effects (e.g., 'Vine Boom'). 10. Generate and export the final video.",
+      "automation_opportunity": "Viblo.ai is already an AI tool. An agentic app could enhance it by automating clip selection based on virality metrics, optimizing clip trimming for engagement, and providing more advanced customization options for titles and animations."
+    },
+    {
+      "step": 3.3,
+      "name": "Crucial Concept: NEEDS to be transformative",
+      "detail": "Content must be 'transformative' to be monetized and avoid copyright issues. Transformative content means 'videos that have lots of additional value on top of the clips you're using' (19:27-19:31). Simply re-posting a clip with minimal captions is 'not transformative' (19:45-20:14). Adding a script, voiceover, high-quality captions, fast-paced edits, cuts, animations, and a storyline makes content transformative (20:17-21:21).",
+      "automation_opportunity": "AI-powered content analysis to ensure 'transformative' criteria are met before publishing. Automated suggestions for adding value (e.g., script points, voiceover ideas, editing techniques) to existing clips."
+    },
+    {
+      "step": 4,
+      "name": "Analyze content (go viral FAST)",
+      "detail": "Use YouTube Studio Analytics to understand video performance. Focus on two key stats: 1. Average View Duration (AVD): How long the average person watches. Goal: As close to 100% of the video length as possible, 'if not higher than 100%' (22:38-22:40). If AVD is low, 'your videos suck' (23:21-23:25), meaning content needs improvement. 2. Swipe Rate: What percentage of people watched past the first 4 seconds ('stayed to watch') vs. 'swiped away.' Goal: 'Swipe aways are bad. You want this to be as low as possible' (24:11-24:15). A good swipe rate is around 19.6% (24:17-24:20). If the swipe rate is high (e.g., 40%), 'your hooks and the intro to your video is bad' (24:33-24:42), meaning the opening needs improvement. Consistent posting (1-2 times per day) with good stats leads to virality.",
+      "automation_opportunity": "AI-driven analytics dashboard with actionable insights. Automated A/B testing suggestions for titles, hooks, and content variations. Predictive analytics for virality based on initial performance metrics."
+    }
+  ],
+  "formats_documented": [
+    {
+      "name": "Commentary (General)",
+      "structure": "Clipping random videos from Instagram, TikTok, Reddit, adding voiceover, script, and captions.",
+      "example_topic": "Hublot Baggins (wholesome and funny videos)",
+      "automation_difficulty": "Medium",
+      "notes": "Still effective, yields high RPMs (35-40 cents vs. 20 cents average). Simple to create."
+    },
+    {
+      "name": "Sub-niche Commentary (Streamers)",
+      "structure": "Taking longer moments from streams, chopping them down to the most important parts, adding high-quality edits, voiceover, and a storyline with captions.",
+      "example_topic": "Stream Phoenix (Kai Cenat, IShowSpeed clips)",
+      "automation_difficulty": "Hard",
+      "notes": "Requires very high-quality editing, fast-paced cuts, and compelling captions to create a narrative. Can be applied to various sub-niches like pets, animals, or sports."
+    },
+    {
+      "name": "Ranking Videos",
+      "structure": "Combining 5-6 short (4-5 second) viral clips, adding ranking numbers, a two-line title (with a highlighted word), sound effects, and animations.",
+      "example_topic": "Ava Ranks ('Ranking The Best Military Falls Ever', 'Ranking The Funniest Cat Moments')",
+      "automation_difficulty": "Easy",
+      "notes": "One of the most viral YouTube Shorts niches. Insanely easy to make with low time input for high potential earnings. Monetization can be 'slightly hit or miss' but good appeal videos help."
+    }
+  ],
+  "tools_used": [
+    {
+      "name": "YouTube Studio Analytics",
+      "purpose": "Analyzing video performance (AVD, swipe rate, views, subscribers, estimated revenue).",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "ChatGPT",
+      "purpose": "Generating channel names, profile picture ideas, rewriting video scripts based on existing viral content.",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "Canva",
+      "purpose": "Designing channel banners.",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "YouTubeToTranscript.com",
+      "purpose": "Extracting transcripts from YouTube videos.",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "ElevenLabs.io",
+      "purpose": "Text-to-speech voiceovers.",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "CapCut",
+      "purpose": "Video editing for Method 1 (manual editing).",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "TikTok",
+      "purpose": "Finding viral content, clips, and ranking ideas.",
+      "replaces_with_agentic_app": "Yes"
+    },
+    {
+      "name": "Viblo.ai",
+      "purpose": "Automated creation of ranking videos (Method 2).",
+      "replaces_with_agentic_app": "Partial"
+    }
+  ],
+  "data_sources": [
+    "TikTok search (for viral topics and clips)",
+    "YouTube (for example channels and outlier videos)",
+    "ChatGPT (for script research and generation)",
+    "Reddit (mentioned as a source for random videos for commentary)"
+  ],
+  "publishing_strategy": {
+    "frequency": "One to two videos every day, consistently.",
+    "timing": "Not explicitly stated, but implies consistent daily posting.",
+    "cross_posting": "Implied for YouTube Shorts, TikTok, and Instagram Reels (formats are suitable).",
+    "monetization_stack": "YouTube Partner Program (YPP) is the primary focus. Affiliate marketing is mentioned generally as a way to make money online."
+  },
+  "growth_hacks": [
+    "Prioritize speed in niche selection and channel setup: 'Money loves speed.'",
+    "Utilize aged YouTube channels for a 'better trust score' or 'warmup' new channels with initial engagement.",
+    "Focus on 'transformative content' by adding significant value (scripts, voiceovers, edits, storylines) to sourced clips to ensure monetization compliance.",
+    "Optimize Average View Duration (AVD) to be near or above 100% of video length; if low, improve content quality.",
+    "Optimize Swipe Rate (percentage of viewers who stay past 4 seconds) to be as low as possible (e.g., <20%); if high, improve video hooks and intros.",
+    "Post consistently (1-2 times per day) to maximize chances of going viral."
+  ],
+  "missing_pieces_for_agentic_app": [
+    "Automated Outlier Detection: AI to identify viral videos and trends across platforms (YouTube, TikTok) within a chosen niche.",
+    "Intelligent Clip Sourcing & Trimming: AI to automatically find, download (without watermarks), and precisely trim relevant clips based on script or ranking criteria.",
+    "Advanced AI Editing & Storytelling: AI capable of generating complex edits, dynamic captions, animations, and coherent storylines to ensure content is highly engaging and 'transformative.'",
+    "AI-Driven Analytics & Optimization: An agent that interprets YouTube Studio analytics (AVD, swipe rate), diagnoses content issues, and suggests specific, actionable improvements for future videos.",
+    "Copyright & Monetization Compliance Agent: AI to proactively assess content for 'transformative' qualities and compliance with platform policies, reducing risks of demonetization or strikes.",
+    "Automated Channel Warmup & Branding: AI to simulate human engagement on new channels and automatically generate/apply comprehensive branding elements."
+  ]
+}

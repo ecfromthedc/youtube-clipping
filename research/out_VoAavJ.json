@@ -1,0 +1,137 @@
+{
+  "video_title": "103K views - viral method",
+  "core_promise": "How to actually make viral YouTube Shorts completely using AI and without showing your face.",
+  "workflow_steps": [
+    {
+      "step": 1,
+      "name": "Choose a Viral Niche",
+      "detail": "Select a niche that has a proven track record of virality on YouTube Shorts. He recommends niches he actively runs, which have generated thousands of dollars in the last 28 days.",
+      "automation_opportunity": "An app could analyze trending niches and provide data-driven recommendations based on current performance metrics."
+    },
+    {
+      "step": 2,
+      "name": "Master the Algorithm",
+      "detail": "Understand how YouTube's algorithm pushes Shorts. Videos first get 20k-30k views (80% non-subscribers, 20% subscribers). YouTube then 'analyzes performance' based on 'Swipe Rate' and 'Average View Duration (AVD)'. Good stats lead to more views in a repeating cycle; bad stats stop the push. 'Your channel is not shadowbanned, YouTube determined your video sucked.'",
+      "automation_opportunity": "An app could provide real-time feedback on these metrics during content creation, suggesting adjustments to improve performance before publishing."
+    },
+    {
+      "step": 3,
+      "name": "Create Viral Shorts (Commentary)",
+      "detail": "Find inspiration channels in the niche. Use vidIQ (Chrome extension) to find 'outlier' videos (videos performing 'way above their average views', ideally 'more than 100x outlier'). Get the original clip (check description for credits or use Google Reverse Image Search). Use YouTubeToTranscript.com to get the script. Use ChatGPT with the prompt: 're-write this script. Use the exact same style, tone, and length, but just change some of the words and make adjustments so it's a new script. While still maintaining all the important points and writing style from the original.' Use ElevenLabs.io to generate a voiceover (preferably using a cloned human voice to avoid monetization issues and increase authenticity). Edit in CapCut: add auto-captions, memes/pictures, and a 'visual hook' (e.g., red dot, arrow) in the first 4 seconds to decrease swipe rate. Trim clips to only the most important parts to increase AVD.",
+      "automation_opportunity": "An agentic app could integrate all these tools: find outliers, fetch original clips, generate rewritten scripts, create voiceovers, and provide an editing interface with automated captioning, meme/picture suggestions, and visual hook templates."
+    },
+    {
+      "step": 4,
+      "name": "Create Viral Shorts (Ranking)",
+      "detail": "Find an outlier ranking video for topic inspiration. Create a well-formatted title in Viblo.ai (e.g., 'Ranking Legendary Basketball Moments') using multiple colors and splitting onto two lines for visual appeal, positioned slightly down the screen. Use TikTok search (e.g., 'basketball funny') to find 4-7 viral clips (sweet spot). Copy clip links and paste them into Viblo.ai. Trim clips to just the most important parts (e.g., 3-4 seconds) to keep the overall video length 35-45 seconds and maximize AVD. Add auto-captions (single word at a time, bold, stroke, positioned at bottom). Add a short title for each ranked clip. The first clip shown should be the 'most engaging' to serve as a visual hook.",
+      "automation_opportunity": "Viblo.ai already automates much of this. An agentic app could further automate clip selection based on virality metrics, suggest ranking orders, and refine visual hook elements."
+    },
+    {
+      "step": 5,
+      "name": "Consistency",
+      "detail": "Post 1-2 videos every single day. This is 'non-negotiable'. Consistently posting and learning/improving daily (better topics, clips, editing) leads to compounding results. He mentions getting his first channel monetized in 35 days by being consistent and another person making $600 in a couple of weeks with consistent posting.",
+      "automation_opportunity": "An app could facilitate a high-volume, consistent publishing schedule by streamlining content creation and scheduling, reducing manual effort and burnout."
+    }
+  ],
+  "formats_documented": [
+    {
+      "name": "Commentary",
+      "structure": "Viral clip from another platform + transformative elements (captions, voiceover, effects, transitions, arrows, sound effects). Can combine multiple clips for a new story.",
+      "example_topic": "Robot playing with a kid",
+      "automation_difficulty": "Medium",
+      "notes": "Powerful niche, doesn't fall off. Focus on strong visual hooks in the first 4 seconds to reduce swipe rate. Aim for AVD > video length."
+    },
+    {
+      "name": "Roblox Rants",
+      "structure": "Roblox gameplay + captions + fast voiceover + memes/pictures to visualize a story. 'Remaster of the traditional Reddit stories niche.'",
+      "example_topic": "AI Teddy Bear Gains a Mind of Its Own",
+      "automation_difficulty": "Easy",
+      "notes": "Insanely easy to make, performs very well. Focus on an interesting/funny story. Use own voice for authenticity and monetization."
+    },
+    {
+      "name": "Ranking",
+      "structure": "Compilation of 4-7 viral short clips, ranked. Includes voiceover, captions, transitions, and effects. Video length 35-45 seconds.",
+      "example_topic": "Ranking Legendary Basketball Moments",
+      "automation_difficulty": "Easy",
+      "notes": "Highest view potential. Use a well-formatted, visually appealing title. Open with the most engaging clip as a visual hook. Trim clips to only the most important parts."
+    }
+  ],
+  "tools_used": [
+    {
+      "name": "YouTube Analytics",
+      "purpose": "Track revenue, views, swipe rate, and average view duration (AVD)",
+      "replaces_with_agentic_app": "no"
+    },
+    {
+      "name": "vidIQ",
+      "purpose": "Find outlier videos on YouTube Shorts for inspiration",
+      "replaces_with_agentic_app": "partial"
+    },
+    {
+      "name": "Google Reverse Image Search",
+      "purpose": "Find original source clips from screenshots",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "YouTubeToTranscript.com",
+      "purpose": "Generate transcripts from YouTube videos",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "ChatGPT",
+      "purpose": "Rewrite scripts for originality and specific tone/style",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "ElevenLabs.io",
+      "purpose": "Generate AI voiceovers and clone human voices",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "CapCut",
+      "purpose": "Video editing, adding captions, memes, effects, transitions",
+      "replaces_with_agentic_app": "partial"
+    },
+    {
+      "name": "Viblo.ai",
+      "purpose": "AI tool for creating viral faceless videos, automates editing for ranking videos",
+      "replaces_with_agentic_app": "partial"
+    },
+    {
+      "name": "TikTok",
+      "purpose": "Source viral short clips for ranking videos",
+      "replaces_with_agentic_app": "partial"
+    }
+  ],
+  "data_sources": [
+    "YouTube Shorts feed (for inspiration channels and content discovery)",
+    "TikTok search (for viral clips)",
+    "ChatGPT (for script generation and topic ideas)",
+    "Inspiration channels' video descriptions (for original clip credits)"
+  ],
+  "publishing_strategy": {
+    "frequency": "1-2 videos every single day",
+    "timing": "Not explicitly stated, but implies consistent daily posting is key.",
+    "cross_posting": "Not explicitly stated for all formats, but clips are sourced from TikTok/Instagram/Twitter and posted to YouTube Shorts.",
+    "monetization_stack": "YouTube Partner Program (YPP) is the primary monetization method shown, with affiliate marketing implied as a secondary option."
+  },
+  "growth_hacks": [
+    "Choose niches with high inherent virality and proven success.",
+    "Understand and optimize for YouTube Shorts algorithm metrics: low Swipe Rate (<20%, ideally 15%) and high Average View Duration (AVD > video length).",
+    "Implement strong visual hooks in the first 4 seconds of videos (e.g., red dots, arrows, engaging content) to reduce swipe rate.",
+    "Keep videos fast-paced and trim out dead space to maximize AVD.",
+    "Use AI tools to automate script writing and voiceover generation, saving time for consistency.",
+    "Use a cloned human voice for AI voiceovers to increase authenticity and avoid monetization issues.",
+    "Format titles strategically with multiple colors and line breaks for visual appeal and quick comprehension.",
+    "Consistently post daily (1-2 videos) to maximize chances of hitting the algorithm and compounding improvements."
+  ],
+  "missing_pieces_for_agentic_app": [
+    "Automated outlier detection and original clip sourcing across multiple platforms (YouTube, TikTok, Instagram, Twitter).",
+    "Integrated script generation and voiceover creation with voice cloning capabilities.",
+    "Advanced video editing features (effects, transitions, meme/picture overlays) fully automated based on script and clip content.",
+    "Real-time feedback loop during creation to optimize for swipe rate and AVD.",
+    "Automated title formatting and visual hook generation.",
+    "Automated trimming of clips to optimal lengths.",
+    "A centralized dashboard to manage multiple channels and track performance metrics across all platforms."
+  ]
+}

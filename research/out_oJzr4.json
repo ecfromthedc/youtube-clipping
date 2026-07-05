@@ -1,0 +1,161 @@
+{
+  "video_title": "top 5 BEST yt shorts niches in 2026 (to make thousands)",
+  "core_promise": "The top 5 faceless YouTube Shorts niches for 2026 that can make you thousands of dollars in profit with the highest viral potential, getting hundreds of millions of views, and are beginner-oriented.",
+  "workflow_steps": [
+    {
+      "step": 1,
+      "name": "Niche Selection",
+      "detail": "Identify a niche with high viral potential and ease of content creation. Kellan emphasizes this as the 'most important part' for success.",
+      "automation_opportunity": "easy"
+    },
+    {
+      "step": 2,
+      "name": "Content Sourcing (Clips/Memes)",
+      "detail": "Find relevant video clips or memes from platforms like TikTok, Instagram, YouTube, Reddit, or Twitter. For ranking videos, he specifically recommends TikTok's search engine.",
+      "automation_opportunity": "medium"
+    },
+    {
+      "step": 3,
+      "name": "Video Download/Import",
+      "detail": "Download selected clips, often without watermarks. For ranking videos, Viblo.ai can download TikTok clips directly by pasting the link.",
+      "automation_opportunity": "easy"
+    },
+    {
+      "step": 4,
+      "name": "Initial Editing & Trimming",
+      "detail": "Trim clips to their most engaging parts, removing unnecessary intros/outros. This is done within the editing software.",
+      "automation_opportunity": "medium"
+    },
+    {
+      "step": 5,
+      "name": "Captioning",
+      "detail": "Add 'really engaging captions' to videos to enhance viewer understanding and engagement. Styles vary by niche (e.g., simple text for biker/bodycam, meme text for meme stories, ranking numbers for ranking videos).",
+      "automation_opportunity": "easy"
+    },
+    {
+      "step": 6,
+      "name": "Visual Effects & Overlays",
+      "detail": "Incorporate editing effects like zoom-ins, arrows, circles, and pop-ups to draw viewer attention to key moments. This is crucial for transformative content.",
+      "automation_opportunity": "medium"
+    },
+    {
+      "step": 7,
+      "name": "Voiceover/Commentary",
+      "detail": "Record or generate a voiceover to narrate the video, explain memes, or tell a story. Kellan strongly recommends using one's own voice for meme stories and commentary to build authenticity and a brand.",
+      "automation_opportunity": "easy"
+    },
+    {
+      "step": 8,
+      "name": "Background Footage (for Meme Stories)",
+      "detail": "For meme stories, add background footage, typically Minecraft gameplay, behind the memes.",
+      "automation_opportunity": "medium"
+    },
+    {
+      "step": 9,
+      "name": "AI Video Generation (for Skeleton Videos)",
+      "detail": "For advanced niches like 'Skeleton Videos,' generate 3D animated footage using AI video generation tools based on a script. This is the most skill-intensive step.",
+      "automation_opportunity": "hard"
+    },
+    {
+      "step": 10,
+      "name": "Final Export",
+      "detail": "Export the completed video in the appropriate format for YouTube Shorts.",
+      "automation_opportunity": "easy"
+    }
+  ],
+  "formats_documented": [
+    {
+      "name": "Biker / Body Cam Footage",
+      "structure": "Compilation of real-life bodycam or dashcam footage (e.g., from bikers, security cameras) with engaging captions, editing effects (zoom-ins), and sometimes voiceovers to make it 'transformative' and add value.",
+      "example_topic": "Biker: Almost got hit",
+      "automation_difficulty": "medium",
+      "notes": "Requires significant editing. Can be monetized if transformative. High view potential (e.g., half a billion views on example channel)."
+    },
+    {
+      "name": "Ranking Videos",
+      "structure": "Compilations of short, viral clips (often from TikTok/Instagram) presented in a ranked format (e.g., 'Top 5 Funniest Fails'). Features a clear title, numbered rankings, and simple transitions between clips.",
+      "example_topic": "Ranking Funniest Trampoline Fails",
+      "automation_difficulty": "easy",
+      "notes": "Extremely high view potential (e.g., 56 million views in 11 days). Very simple to create, especially with AI tools like Viblo.ai. Kellan's personal favorite for making money."
+    },
+    {
+      "name": "Meme Stories",
+      "structure": "Compilations of popular memes (e.g., Twitter screenshots, Reddit posts) displayed on screen, often with a Minecraft gameplay background, and narrated with a voiceover that reads out the memes and adds commentary.",
+      "example_topic": "Childhood memes #5",
+      "automation_difficulty": "medium",
+      "notes": "Very high view potential (e.g., 4 billion views on example channel). Voiceover makes it 'entirely original' and 'completely faceless.' Builds a branded channel."
+    },
+    {
+      "name": "Commentary",
+      "structure": "Takes viral clips, re-edits them with captions, a voiceover that tells a story or provides commentary, and visual cues like arrows and pop-ups to guide viewer attention and make the content engaging and 'transformative'.",
+      "example_topic": "Mom Taught Daughter A Beautiful Lesson",
+      "automation_difficulty": "medium",
+      "notes": "High RPMs (e.g., 31 cents per 1k engaged views). Kellan personally made over $15k from this niche. Allows for creative style and branding. High view potential (e.g., 5.6 billion views on example channel)."
+    },
+    {
+      "name": "Skeleton Videos",
+      "structure": "3D animated videos featuring a skeleton character engaging in various activities (e.g., sports, hobbies), with text overlays and voiceovers. The animation itself is AI-generated.",
+      "example_topic": "What Happens If You Try Playing Madden For 1 Year?",
+      "automation_difficulty": "hard",
+      "notes": "Extremely high viral potential for new channels (e.g., 20k subscribers in 3 weeks). Requires more skill and advanced AI video generation tools. Scripting can be done with ChatGPT."
+    }
+  ],
+  "tools_used": [
+    {
+      "name": "Viblo.ai",
+      "purpose": "AI-powered tool for creating faceless content, specifically demonstrated for 'Video Ranking' (downloads clips, adds rankings, trims) and 'Generate AI Videos' (for skeleton video footage). Offers a 7-day free trial.",
+      "replaces_with_agentic_app": "partial"
+    },
+    {
+      "name": "CapCut",
+      "purpose": "General video editing for compiling clips, adding captions, effects, and voiceovers. Mentioned as an option for editing complex videos like 'Skeleton Videos'.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "ChatGPT",
+      "purpose": "Used for generating scripts, particularly for 'Skeleton Videos'.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "Google Veo 3.1",
+      "purpose": "State-of-the-art AI video generation model for high-quality visuals, but noted as 'very expensive to generate'.",
+      "replaces_with_agentic_app": "yes"
+    },
+    {
+      "name": "Cling",
+      "purpose": "A more cost-effective AI video generation model, accessible through Viblo.ai, for creating footage similar to Google Veo 3.1.",
+      "replaces_with_agentic_app": "yes"
+    }
+  ],
+  "data_sources": [
+    "TikTok search",
+    "Instagram",
+    "YouTube",
+    "Reddit",
+    "Twitter",
+    "AI video generation (e.g., Viblo.ai's 'Generate AI Videos' feature, Cling, Google Veo 3.1)"
+  ],
+  "publishing_strategy": {
+    "frequency": "1 to 2 videos a day",
+    "timing": "Consistent posting for 3-4 weeks to see results.",
+    "cross_posting": "Not explicitly detailed, but implied content is optimized for YouTube Shorts.",
+    "monetization_stack": "YouTube Partner Program (Shorts Feed ads), affiliate links (mentioned in Skelly Skillz channel description)."
+  },
+  "growth_hacks": [
+    "Selecting the right niche is the most important part for success.",
+    "Consistency: post 1-2 videos a day.",
+    "Making content 'transformative' by adding value (captions, effects, voiceovers).",
+    "Using your own voice for commentary/meme stories for authenticity and branding.",
+    "Taking inspiration from currently successful channels in the chosen niche.",
+    "Leveraging AI tools to streamline content creation and maintain consistency."
+  ],
+  "missing_pieces_for_agentic_app": [
+    "Automated identification and selection of trending/viral clips from various platforms (TikTok, Instagram, Reddit, Twitter).",
+    "Advanced AI-driven video re-editing capabilities (automatic zoom-ins, object tracking for arrows/circles, dynamic pop-ups) tailored to specific niche formats.",
+    "Contextual AI voiceover generation that matches the tone and storytelling style required for commentary and meme stories, potentially even cloning a user's voice.",
+    "Seamless integration of AI-generated background footage (e.g., Minecraft gameplay) or 3D animated characters (like skeletons) with user-provided scripts and voiceovers.",
+    "Automated copyright and fair use analysis for sourced content to ensure monetization eligibility.",
+    "Automated content scheduling and publishing directly to YouTube Shorts with optimized titles and hashtags.",
+    "A robust, cost-effective AI video generation engine that can produce high-quality, diverse visuals on demand for niches like 'Skeleton Videos' without prohibitive costs."
+  ]
+}
