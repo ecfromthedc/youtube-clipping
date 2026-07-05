@@ -14,6 +14,7 @@ mod enhance;
 mod experiment;
 mod guardrails;
 mod hooks;
+mod listicle;
 mod optimize;
 mod qc;
 mod reframe;

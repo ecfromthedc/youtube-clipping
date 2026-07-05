@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::{captions, clip, config, srt, transcribe};
+use crate::{captions, clip, config, listicle, srt, transcribe};
 
 /// Embedded static frontend (rust-embed) — bundled at compile time.
 #[derive(RustEmbed)]
@@ -61,6 +61,8 @@ struct Project {
     candidates: Vec<SerdeCandidate>,
     /// Renders produced from this project, keyed by candidate index.
     renders: Vec<Render>,
+    /// Ranking-listicle compilations produced from this project.
+    compiles: Vec<Render>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -117,6 +119,7 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/projects/:id/upload", post(upload_video))
         .route("/api/projects/:id/transcribe", post(transcribe_project))
         .route("/api/projects/:id/render", post(render_clip))
+        .route("/api/projects/:id/compile", post(compile_project))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
@@ -178,6 +181,7 @@ async fn create_project(
         transcript: vec![],
         candidates: vec![],
         renders: vec![],
+        compiles: vec![],
     };
     s.projects.write().await.insert(id.clone(), p);
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
@@ -453,6 +457,107 @@ fn write_transcript_snapshot(root: &Path, id: &str, segs: &[SerdeSegment]) -> Re
     Ok(())
 }
 
+/// Compile N ranked windows into one countdown-style compilation video.
+#[derive(Deserialize)]
+struct CompileItem {
+    start: f64,
+    end: f64,
+    #[serde(default)]
+    label: Option<String>,
+}
+#[derive(Deserialize)]
+struct CompileBody {
+    items: Vec<CompileItem>,
+    #[serde(default)]
+    title: Option<String>,
+    /// "countdown" (1,2,3...N — best first) or "countup" (N...3,2,1 — best last, the default
+    /// reference-reel reveal). Default countdown for backward-compat feel.
+    #[serde(default)]
+    order: Option<String>,
+}
+async fn compile_project(
+    State(s): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<CompileBody>,
+) -> Result<Json<Value>, AppError> {
+    if body.items.is_empty() {
+        return Err(AppError(anyhow!("need at least one item to compile")));
+    }
+    // Snapshot what we need before spawn_blocking.
+    let video = {
+        let projects = s.projects.read().await;
+        if !projects.contains_key(&id) {
+            return Err(AppError(anyhow!("project not found")));
+        }
+        source_video(&s.root, &id)
+    };
+    if !video.exists() {
+        return Err(AppError(anyhow!("no source video uploaded yet")));
+    }
+    // Pull the transcript snapshot from disk (render transcribe_project persists it).
+    let transcript_path = project_dir(&s.root, &id).join("transcript.json");
+    let segs: Vec<srt::Segment> = std::fs::read_to_string(&transcript_path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<SerdeSegment>>(&t).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|x| srt::Segment::new(x.start, x.end, x.text))
+        .collect();
+
+    // Assign ranks 1..N by input order, then build RankItems.
+    let items: Vec<listicle::RankItem> = body
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, it)| listicle::RankItem {
+            start: it.start,
+            end: it.end,
+            rank: i + 1,
+            label: it.label.clone().unwrap_or_default(),
+        })
+        .collect();
+    let order = match body.order.as_deref().unwrap_or("countup") {
+        "countdown" => listicle::Order::CountDown,
+        _ => listicle::Order::CountUp,
+    };
+    let title = body.title.unwrap_or_default();
+    let title_for_task = title.clone();
+    let title_used = title.clone();
+    let opts = listicle::CompileOpts { title, order };
+
+    let root = s.root.clone();
+    let id_for_task = id.clone();
+    let items_for_task = items.clone();
+    let opts_for_task = opts;
+    let result = tokio::task::spawn_blocking(move || -> Result<(String, f64, usize)> {
+        let compiles_dir = project_dir(&root, &id_for_task).join("compiles");
+        std::fs::create_dir_all(&compiles_dir)?;
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string();
+        let out_name = format!("{stamp}.mp4");
+        let out_path = compiles_dir.join(&out_name);
+        listicle::compile(&root, &video, &segs, &items_for_task, &opts_for_task, &out_path)?;
+        // Sidecar title for warm_cache.
+        if !title_for_task.is_empty() {
+            let _ = std::fs::write(compiles_dir.join(format!("{out_name}.title")), &title_for_task);
+        }
+        let total: f64 = items_for_task.iter().map(|i| i.end - i.start).sum();
+        Ok((format!("compiles/{out_name}"), total, items_for_task.len()))
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))??;
+
+    let mut projects = s.projects.write().await;
+    let p = projects
+        .get_mut(&id)
+        .ok_or_else(|| AppError(anyhow!("project vanished")))?;
+    p.compiles.push(Render { path: result.0, title: title_used });
+    Ok(Json(json!({
+        "path": format!("/api/projects/{id}/files/{}", p.compiles.last().unwrap().path),
+        "duration": result.1,
+        "segments": result.2,
+    })))
+}
+
 // ── routes — static + project files ───────────────────────────────────────────
 
 /// Serve `/` and the SPA shell.
@@ -506,6 +611,30 @@ fn static_response(path: &str) -> Response {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+/// Scan a directory of MP4 renders/compilations and rebuild the `Render` list with
+/// sidecar titles. Used by `warm_cache` for both `renders/` and `compiles/`.
+fn scan_renders_dir(dir: &Path, prefix: &str) -> Vec<Render> {
+    let mut out = Vec::new();
+    let rd = match std::fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(_) => return out,
+    };
+    let mut mp4s: Vec<(String, PathBuf)> = Vec::new();
+    for entry in rd.flatten() {
+        if entry.path().extension().and_then(|e| e.to_str()) == Some("mp4") {
+            let name = entry.file_name().to_string_lossy().to_string();
+            mp4s.push((name, entry.path()));
+        }
+    }
+    mp4s.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, path) in mp4s {
+        let title = std::fs::read_to_string(format!("{}.title", path.display()))
+            .unwrap_or_default();
+        out.push(Render { path: format!("{prefix}/{name}"), title });
+    }
+    out
+}
 
 /// ffprobe → duration seconds. Errors propagate; callers fall back to 0.
 fn probe_duration(path: &str) -> Result<f64> {
@@ -561,26 +690,8 @@ async fn warm_cache(s: &AppState) {
                 .ok()
                 .and_then(|t| t.trim().parse().ok())
                 .unwrap_or(0.0);
-            let renders_root = dir.join("renders");
-            let mut renders = Vec::new();
-            if let Ok(rd) = std::fs::read_dir(&renders_root) {
-                let mut mp4s: Vec<(String, PathBuf)> = Vec::new();
-                for entry in rd.flatten() {
-                    if entry.path().extension().and_then(|e| e.to_str()) == Some("mp4") {
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        mp4s.push((name, entry.path()));
-                    }
-                }
-                mp4s.sort_by(|a, b| a.0.cmp(&b.0));
-                for (name, path) in mp4s {
-                    let title = std::fs::read_to_string(format!("{}.title", path.display()))
-                        .unwrap_or_default();
-                    renders.push(Render {
-                        path: format!("renders/{name}"),
-                        title,
-                    });
-                }
-            }
+            let renders = scan_renders_dir(&dir.join("renders"), "renders");
+            let compiles = scan_renders_dir(&dir.join("compiles"), "compiles");
             // Re-plan candidates from the transcript if it exists.
             let segs: Vec<srt::Segment> = transcript
                 .iter()
@@ -606,7 +717,7 @@ async fn warm_cache(s: &AppState) {
                 .unwrap_or_else(|| "upload.mp4".into());
             out.push((
                 id.clone(),
-                Project { id, filename, duration, transcript, candidates: cands, renders },
+                Project { id, filename, duration, transcript, candidates: cands, renders, compiles },
             ));
         }
         let _ = root; // touch root to keep the closure's intent clear (future: re-probe durations)

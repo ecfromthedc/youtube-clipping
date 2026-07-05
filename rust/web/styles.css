@@ -751,3 +751,92 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ── Compile section (ranking listicle) ───────────────────────────────────── */
+
+.compile-section {
+  background: linear-gradient(145deg, rgba(225, 0, 195, 0.06), rgba(133, 0, 215, 0.04));
+  border: 1px solid rgba(225, 0, 195, 0.18);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  box-shadow: var(--razor-top);
+}
+
+.compile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.compile-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  transition: border 0.15s;
+}
+.compile-item:hover { border-color: var(--accent-3); }
+
+.compile-rank {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  font-family: var(--font-mono);
+  box-shadow: var(--razor-top), var(--razor-bottom);
+}
+
+.compile-pick-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compile-controls {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.compile-controls .btn { padding: 4px 8px; font-size: 11px; line-height: 1; }
+
+.compile-order-toggle {
+  display: flex;
+  gap: 6px;
+  background: var(--bg-2);
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.compile-order-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.compile-order-btn.active {
+  background: var(--brand-gradient);
+  color: white;
+  box-shadow: var(--razor-top), var(--razor-bottom);
+}

@@ -327,8 +327,10 @@ async function projectPage(page, id) {
 
     // SIDEBAR
     sidebar.appendChild(sidebarActions(project, player));
+    if (project.candidates.length >= 2) sidebar.appendChild(compileSection(project));
     if (project.candidates.length > 0) sidebar.appendChild(candidateList(project, player));
     if (project.renders.length > 0) sidebar.appendChild(rendersList(project));
+    if (project.compiles && project.compiles.length > 0) sidebar.appendChild(compilesList(project));
   };
 
   // First load
@@ -544,6 +546,150 @@ function rendersList(project) {
     ));
   }
   section.appendChild(list);
+  return section;
+}
+
+// ── Sidebar: compiles (ranking listicles) ──────────────────────────────
+function compilesList(project) {
+  const section = h("div", { class: "sidebar-section" });
+  section.appendChild(h("h3", {}, `Compilations (${project.compiles.length})`));
+  const list = h("div", { class: "renders" });
+  for (const r of project.compiles) {
+    list.appendChild(h("div", { class: "render-card" },
+      h("div", { class: "render-thumb", style: "background: var(--brand-gradient); color: white;" }, "🏆"),
+      h("div", { class: "render-info" },
+        h("div", { class: "render-title" }, r.title || "ranking compilation"),
+        h("div", { class: "render-meta" }, r.path.split("/").pop()),
+      ),
+      h("a", { class: "btn btn-ghost btn-sm", href: `/api/projects/${project.id}/files/${r.path}`, download: "" }, "↓"),
+    ));
+  }
+  section.appendChild(list);
+  return section;
+}
+
+// ── Sidebar: ranking compile builder ───────────────────────────────────
+function compileSection(project) {
+  const section = h("div", { class: "sidebar-section compile-section" });
+  section.appendChild(h("h3", {}, "🏆 Ranking compilation"));
+
+  // Sortable list of picks. Start from top-N candidates, best LAST (countup reveal —
+  // the reference reel saves the best moment for last).
+  const initialPicks = [...project.candidates]
+    .sort((a, b) => a.score - b.score) // worst → best; first played, last is the punchline
+    .slice(0, Math.min(5, project.candidates.length));
+  let picks = initialPicks.map((c) => ({ start: c.start, end: c.end, label: c.text.slice(0, 60) }));
+
+  const titleInput = h("input", {
+    class: "input",
+    placeholder: "Hook title (e.g. 'Top 5 Funniest Moments')",
+    value: project.candidates[0]?.text?.slice(0, 60) || "",
+  });
+
+  // Order toggle — countup (default, best last) vs countdown.
+  let order = "countup";
+  const orderToggle = h("div", { class: "compile-order-toggle" });
+  const upBtn = h("button", { class: "compile-order-btn active" }, "▲ Best last");
+  const downBtn = h("button", { class: "compile-order-btn" }, "▼ Best first");
+  const setOrder = (val, active, inactive) => {
+    order = val;
+    active.classList.add("active");
+    inactive.classList.remove("active");
+  };
+  upBtn.addEventListener("click", () => setOrder("countup", upBtn, downBtn));
+  downBtn.addEventListener("click", () => setOrder("countdown", downBtn, upBtn));
+  orderToggle.appendChild(upBtn);
+  orderToggle.appendChild(downBtn);
+
+  const list = h("div", { class: "compile-list" });
+
+  const renderList = () => {
+    clear(list);
+    picks.forEach((pick, i) => {
+      const card = h("div", { class: "compile-item" },
+        h("div", { class: "compile-rank", style: i === picks.length - 1 ? "background: var(--brand-gradient);" : "" }, String(i + 1)),
+        h("div", { class: "compile-pick-text" }, pick.label || `${pick.start.toFixed(1)}–${pick.end.toFixed(1)}s`),
+        h("div", { class: "compile-controls" },
+          h("button", {
+            class: "btn btn-ghost btn-sm",
+            title: "Move up",
+            onclick: () => {
+              if (i === 0) return;
+              [picks[i - 1], picks[i]] = [picks[i], picks[i - 1]];
+              renderList();
+            },
+          }, "↑"),
+          h("button", {
+            class: "btn btn-ghost btn-sm",
+            title: "Move down",
+            onclick: () => {
+              if (i === picks.length - 1) return;
+              [picks[i + 1], picks[i]] = [picks[i], picks[i + 1]];
+              renderList();
+            },
+          }, "↓"),
+          h("button", {
+            class: "btn btn-danger btn-sm",
+            title: "Remove",
+            onclick: () => {
+              picks.splice(i, 1);
+              renderList();
+            },
+          }, "✕"),
+        ),
+      );
+      list.appendChild(card);
+    });
+    if (picks.length < 2) {
+      list.appendChild(h("div", { class: "muted mt-8", style: "font-size: 12px;" }, "Need at least 2 picks to compile."));
+    }
+  };
+  renderList();
+
+  const compileBtn = h("button", { class: "btn btn-primary", style: "width: 100%;" }, "Compile ranking video");
+  const status = h("div", { class: "mt-8" });
+
+  compileBtn.addEventListener("click", async () => {
+    if (picks.length < 2) {
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-warn" }, "Add at least 2 picks to compile."));
+      return;
+    }
+    compileBtn.disabled = true;
+    clear(status);
+    status.appendChild(h("div", { class: "row" },
+      h("div", { class: "spinner" }),
+      `Compiling ${picks.length} clips → one ranking video…`,
+    ));
+    try {
+      const out = await api.post(`/api/projects/${project.id}/compile`, {
+        items: picks.map((p) => ({ start: p.start, end: p.end, label: p.label })),
+        title: titleInput.value || null,
+        order,
+      });
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-info" },
+        `✓ Compiled ${out.segments} clips (${out.duration.toFixed(1)}s). `,
+        h("a", { href: out.path, download: "" }, "Download MP4"),
+      ));
+      setTimeout(() => location.reload(), 1000);
+    } catch (err) {
+      compileBtn.disabled = false;
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-error" }, `⚠ ${err.message}`));
+    }
+  });
+
+  section.appendChild(h("p", { class: "muted", style: "font-size: 12px; margin: 0 0 10px;" },
+    "Cuts each ranked moment, stamps a rank number on the left edge, concatenates into one 9:16 video.",
+  ));
+  section.append(
+    titleInput,
+    h("div", { class: "field", style: "margin-top: 10px;" }, h("label", {}, "Reveal order"), orderToggle),
+    list,
+    h("div", { style: "margin-top: 12px;" }, compileBtn),
+    status,
+  );
   return section;
 }
 

@@ -102,7 +102,7 @@ pub fn build_chunks(segments: &[Segment], max_words: usize, min_dwell: f64) -> V
 // shown per frame), which is the deterministic part cross-checked via `ycp caprender`.
 
 /// Heavy display fonts (opus look). First existing path wins. Mirrors FONT_CANDIDATES.
-const FONT_CANDIDATES: [&str; 3] = [
+pub(crate) const FONT_CANDIDATES: [&str; 3] = [
     "/System/Library/Fonts/Supplemental/Arial Black.ttf",
     "/System/Library/Fonts/Supplemental/Impact.ttf",
     "/Library/Fonts/Arial Black.ttf",
@@ -110,8 +110,8 @@ const FONT_CANDIDATES: [&str; 3] = [
 pub const FPS: u32 = 15;
 pub const SIZE: (u32, u32) = (1080, 1920);
 const ACTIVE: Rgba<u8> = Rgba([255, 222, 0, 255]); // highlighted (current) word — yellow
-const IDLE: Rgba<u8> = Rgba([255, 255, 255, 255]); // other words in the chunk — white
-const OUTLINE: Rgba<u8> = Rgba([0, 0, 0, 255]); // fat black stroke for legibility
+pub(crate) const IDLE: Rgba<u8> = Rgba([255, 255, 255, 255]); // other words in the chunk — white
+pub(crate) const OUTLINE: Rgba<u8> = Rgba([0, 0, 0, 255]); // fat black stroke for legibility
 const CAPTION_CASE: &str = "lower";
 const CAPTION_SIZE_PCT: f64 = 10.0; // caption height cap, as % of frame width
 const HOOK_HOLD_SEC: f64 = 7.0; // hook/title stays on screen at least this long
@@ -158,7 +158,7 @@ fn case_str(s: &str, case: &str) -> String {
 /// missing TTF → blank caption frames (caller `clip.py` already ships a plain clip on caption
 /// failure). The target machines have Arial Black, so this is academic. Add an embedded font
 /// only if a fontless host ever needs legible captions.
-fn load_font(font_path: Option<&str>) -> Option<FontVec> {
+pub(crate) fn load_font(font_path: Option<&str>) -> Option<FontVec> {
     let paths = font_path.into_iter().chain(FONT_CANDIDATES.iter().copied());
     for p in paths {
         if Path::new(p).is_file() {
@@ -174,7 +174,7 @@ fn load_font(font_path: Option<&str>) -> Option<FontVec> {
 
 /// Advance-based text width + stroke padding, rounded to whole px (Pillow's textbbox
 /// returns ints). Approximates `_text_width`.
-fn text_width(font: &FontVec, text: &str, px: f32, stroke: u32) -> f32 {
+pub(crate) fn text_width(font: &FontVec, text: &str, px: f32, stroke: u32) -> f32 {
     let sf = font.as_scaled(PxScale::from(px));
     let adv: f32 = text.chars().map(|c| sf.h_advance(font.glyph_id(c))).sum();
     (adv + 2.0 * stroke as f32).round()
@@ -182,13 +182,13 @@ fn text_width(font: &FontVec, text: &str, px: f32, stroke: u32) -> f32 {
 
 /// Full font height + stroke padding (uses ascent/descent, like Pillow's "Ay" bbox).
 /// Approximates `_text_height`.
-fn text_height(font: &FontVec, px: f32, stroke: u32) -> f32 {
+pub(crate) fn text_height(font: &FontVec, px: f32, stroke: u32) -> f32 {
     let sf = font.as_scaled(PxScale::from(px));
     (sf.ascent() - sf.descent()).round() + 2.0 * stroke as f32
 }
 
 /// Largest px size (<= max_px, stepping by 4, floor 14) whose `text` fits max_w. Mirrors `_fit_font`.
-fn fit_px(font: &FontVec, text: &str, max_px: f32, max_w: f32, stroke: u32) -> f32 {
+pub(crate) fn fit_px(font: &FontVec, text: &str, max_px: f32, max_w: f32, stroke: u32) -> f32 {
     let mut size = max_px;
     while size > 14.0 {
         if text_width(font, text, size, stroke) <= max_w {
@@ -243,7 +243,7 @@ fn blend(img: &mut RgbaImage, x: i32, y: i32, color: Rgba<u8>, coverage: f32) {
 /// ponytail: outline = stamp a stroke-radius disk per covered glyph pixel — O(ink_px · stroke²).
 /// Fine for a background pipeline; if a frame ever renders slow, swap to a separable max-dilation
 /// of a single glyph coverage mask.
-fn draw_word(img: &mut RgbaImage, font: &FontVec, text: &str, px: f32, x_left: f32, y_top: f32, fill: Rgba<u8>, stroke: u32) {
+pub(crate) fn draw_word(img: &mut RgbaImage, font: &FontVec, text: &str, px: f32, x_left: f32, y_top: f32, fill: Rgba<u8>, stroke: u32) {
     let scale = PxScale::from(px);
     let sf = font.as_scaled(scale);
     let baseline = y_top + sf.ascent();
@@ -426,6 +426,56 @@ pub fn burn_captions(
             .and_then(|_| std::fs::remove_file(&tmp_out))
     })?;
     Ok(out_path.to_path_buf())
+}
+
+// ── rank-badge overlay (listicle format) ──────────────────────────────────────
+//
+// Used by `listicle::compile` — stamps a giant numeral ("1", "2", ...) at the left edge
+// of every frame so a countdown/compilation video can show rank. Same opus font + fat
+// black outline as the captions/title, but filled with the brand magenta so the badge
+// pops against arbitrary footage. PNG sequence + ffmpeg overlay, identical to render_overlay.
+
+/// Brand magenta fill for the rank numeral (matches the Rising Tides palette).
+const RANK_FILL: Rgba<u8> = Rgba([225, 0, 195, 255]);
+
+/// Render a transparent PNG sequence (00000.png ...) with a giant `rank` numeral stamped
+/// at the left-center of the frame. Returns the frame count. Mirrors `render_overlay`'s
+/// shape so the two sequences composite cleanly at the same fps/size.
+pub(crate) fn render_rank_overlay(
+    rank: usize,
+    duration: f64,
+    out_dir: &Path,
+    size: (u32, u32),
+    fps: u32,
+    font_path: Option<&str>,
+) -> Result<u32> {
+    std::fs::create_dir_all(out_dir).with_context(|| format!("mkdir {}", out_dir.display()))?;
+    let (w, h) = size;
+    let stroke = (w / 135).max(6);
+    let n_frames = ((duration * fps as f64).ceil().max(1.0)) as u32;
+    let font = load_font(font_path);
+    let numeral = rank.to_string();
+    // Half-frame-tall numeral, fit to ~32% of frame width so it never crowds the captions.
+    let max_px = h as f32 * 0.5;
+    let max_w = w as f32 * 0.32;
+    let px = font.as_ref().map_or(max_px, |f| fit_px(f, &numeral, max_px, max_w, stroke));
+
+    for f in 0..n_frames {
+        let mut img = RgbaImage::from_pixel(w, h, Rgba([0, 0, 0, 0]));
+        if let Some(fnt) = font.as_ref() {
+            let tw = text_width(fnt, &numeral, px, stroke);
+            let th = text_height(fnt, px, stroke);
+            // Left-edge anchor with breathing room; vertically centered.
+            let x_left = (w as f32 * 0.06).floor();
+            let y_top = ((h as f32 - th) / 2.0).floor();
+            // Stamp a soft glow disk behind the numeral for extra pop on busy footage.
+            let _ = tw; // width computed for centering if we ever want it; left-anchor for now
+            draw_word(&mut img, fnt, &numeral, px, x_left, y_top, RANK_FILL, stroke);
+        }
+        img.save(out_dir.join(format!("{f:05}.png")))
+            .with_context(|| format!("write rank frame {f}"))?;
+    }
+    Ok(n_frames)
 }
 
 #[cfg(test)]
