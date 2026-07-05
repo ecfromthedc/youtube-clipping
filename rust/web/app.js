@@ -91,6 +91,7 @@ function topbar(route) {
     ),
     h("nav", { class: "topbar-nav" },
       nav("Projects", "/"),
+      nav("Studio", "/studio"),
       nav("Pipeline", "/pipeline"),
       h("span", { class: "pill live" }, h("span", { class: "dot" }), "online"),
     ),
@@ -110,6 +111,8 @@ async function route() {
   try {
     if (hash === "/" || hash === "") await dashboardPage(page);
     else if (hash === "/pipeline") await pipelinePage(page);
+    else if (hash === "/studio") await studioPage(page);
+    else if (hash.startsWith("/studio/")) await studioFormatPage(page, hash.slice(8));
     else if (hash.startsWith("/p/")) await projectPage(page, hash.slice(3));
     else if (hash.startsWith("/new")) await newProjectPage(page);
     else page.appendChild(h("div", { class: "empty" }, "Not found."));
@@ -331,6 +334,8 @@ async function projectPage(page, id) {
     if (project.candidates.length > 0) sidebar.appendChild(candidateList(project, player));
     if (project.renders.length > 0) sidebar.appendChild(rendersList(project));
     if (project.compiles && project.compiles.length > 0) sidebar.appendChild(compilesList(project));
+    if (project.stories && project.stories.length > 0) sidebar.appendChild(storiesList(project));
+    if (project.commentary && project.commentary.length > 0) sidebar.appendChild(commentaryList(project));
   };
 
   // First load
@@ -549,6 +554,27 @@ function rendersList(project) {
   return section;
 }
 
+// ── Sidebar: storytelling + commentary ────────────────────────────────
+function _studioOutputList(project, items, title, icon, badgeColor) {
+  const section = h("div", { class: "sidebar-section" });
+  section.appendChild(h("h3", {}, `${title} (${items.length})`));
+  const list = h("div", { class: "renders" });
+  for (const r of items) {
+    list.appendChild(h("div", { class: "render-card" },
+      h("div", { class: "render-thumb", style: `background: ${badgeColor}; color: white;` }, icon),
+      h("div", { class: "render-info" },
+        h("div", { class: "render-title" }, r.title || "untitled"),
+        h("div", { class: "render-meta" }, r.path.split("/").pop()),
+      ),
+      h("a", { class: "btn btn-ghost btn-sm", href: `/api/projects/${project.id}/files/${r.path}`, download: "" }, "↓"),
+    ));
+  }
+  section.appendChild(list);
+  return section;
+}
+const storiesList = (project) => _studioOutputList(project, project.stories, "Storytelling", "📖", "linear-gradient(135deg,#7c3aed,#5b21b6)");
+const commentaryList = (project) => _studioOutputList(project, project.commentary, "Commentary", "🎬", "linear-gradient(135deg,#0891b2,#155e75)");
+
 // ── Sidebar: compiles (ranking listicles) ──────────────────────────────
 function compilesList(project) {
   const section = h("div", { class: "sidebar-section" });
@@ -691,6 +717,193 @@ function compileSection(project) {
     status,
   );
   return section;
+}
+
+// ── Studio: format picker ──────────────────────────────────────────────
+const FORMATS = [
+  {
+    slug: "ranking",
+    name: "Ranking Compilation",
+    icon: "🏆",
+    blurb: "Top-N ranked clips, big rank numbers on the left edge, countdown reveal (best plays last). The highest-volume format.",
+    difficulty: "Easy",
+    href: "#/p/",
+    cta: "Open a project →",
+    note: "Lives inside each project (after upload + transcribe)",
+  },
+  {
+    slug: "storytelling",
+    name: "Storytelling / Roblox Rants",
+    icon: "📖",
+    blurb: "Write a script → AI voiceover → looping gameplay background → opus captions → 9:16. Generates original content from words.",
+    difficulty: "Easy",
+    href: "#/studio/storytelling",
+    cta: "Write a script",
+    note: "Needs OmniVoice + a background clip",
+  },
+  {
+    slug: "commentary",
+    name: "Commentary / Reaction",
+    icon: "🎬",
+    blurb: "Paste a viral clip → write commentary → AI VO over ducked original audio + captions. His highest-RPM niche (35-40¢/1k).",
+    difficulty: "Medium",
+    href: "#/studio/commentary",
+    cta: "React to a clip",
+    note: "Needs OmniVoice + a source clip",
+  },
+];
+
+async function studioPage(page) {
+  page.appendChild(h("div", { class: "page-header" },
+    h("div", {},
+      h("h1", { class: "page-title" }, "Studio"),
+      h("p", { class: "page-sub" },
+        "Three formats, one engine. Each is an end-to-end play from the playbook — pick one and ship a Short.",
+      ),
+    ),
+  ));
+
+  // OmniVoice status banner
+  const vo = await api.get("/api/voices").catch(() => ({ available: false, voices: [] }));
+  if (!vo.available) {
+    page.appendChild(h("div", { class: "alert alert-warn mb-24" },
+      "⚠ OmniVoice Studio isn't reachable at localhost:3900. Storytelling + Commentary need it for voiceover. ",
+      h("a", { href: "#/pipeline" }, "Start it →"),
+    ));
+  }
+
+  const grid = h("div", { class: "format-grid" });
+  for (const f of FORMATS) {
+    grid.appendChild(h("a", { class: "format-card", href: f.href },
+      h("div", { class: "format-icon" }, f.icon),
+      h("div", { class: "format-name" }, f.name),
+      h("div", { class: "format-blurb" }, f.blurb),
+      h("div", { class: "format-meta" },
+        h("span", { class: `pill ${f.difficulty === "Easy" ? "" : "pill-warn"}` }, f.difficulty),
+        h("span", { class: "muted", style: "font-size:11px;" }, f.note),
+      ),
+      h("div", { class: "format-cta" }, f.cta, " →"),
+    ));
+  }
+  page.appendChild(grid);
+}
+
+async function studioFormatPage(page, slug) {
+  const format = FORMATS.find((f) => f.slug === slug);
+  if (!format || (slug !== "storytelling" && slug !== "commentary")) {
+    page.appendChild(h("div", { class: "empty" }, "Unknown format."));
+    return;
+  }
+  // The Rust enum tags on "story" (the variant name lowercased); map from URL slug.
+  const formatTag = slug === "storytelling" ? "story" : slug;
+  page.appendChild(h("div", { class: "page-header" },
+    h("div", {},
+      h("a", { class: "muted", href: "#/studio", style: "font-size:13px;" }, "← Studio"),
+      h("h1", { class: "page-title mt-8" }, `${format.icon} ${format.name}`),
+      h("p", { class: "page-sub" }, format.blurb),
+    ),
+  ));
+
+  // Voice picker
+  const vo = await api.get("/api/voices").catch(() => ({ available: false, voices: [] }));
+  const voiceSelect = h("select", { class: "select" },
+    h("option", { value: "default" }, "Default voice"),
+    ...(vo.voices || []).map((v) =>
+      h("option", { value: v.id }, `${v.name} (${v.id})`)
+    ),
+  );
+  if (!vo.available) {
+    voiceSelect.disabled = true;
+  }
+
+  const titleInput = h("input", { class: "input", placeholder: "Hook title (top of frame, optional)" });
+  const scriptInput = h("textarea", {
+    class: "textarea",
+    style: "min-height: 160px;",
+    placeholder: slug === "storytelling"
+      ? "Write the story / hot take the VO will read. e.g. 'This is the most ridiculous thing that happened at school today...'"
+      : "Write the commentary the VO speaks over the clip. e.g. 'Okay watch what this guy does next — this is actually insane...'",
+  });
+  const speedInput = h("input", { class: "input", type: "number", step: "0.05", min: "0.5", max: "2.0", value: "1.0", placeholder: "1.0" });
+  const langInput = h("input", { class: "input", placeholder: "en (optional)" });
+
+  // Format-specific source field
+  let sourceInput, sourceLabel, duckInput = null;
+  if (slug === "storytelling") {
+    sourceLabel = "Background footage (gameplay/Minecraft) — URL or local path";
+    sourceInput = h("input", {
+      class: "input",
+      placeholder: "https://www.youtube.com/watch?v=... or /path/to/subway_surfer.mp4",
+    });
+  } else {
+    sourceLabel = "Source clip — URL (YT/TT/IG) or local path";
+    sourceInput = h("input", {
+      class: "input",
+      placeholder: "https://www.tiktok.com/@.../video/... or /path/to/clip.mp4",
+    });
+    duckInput = h("input", { class: "input", type: "number", step: "0.05", min: "0", max: "1", value: "0.25" });
+  }
+
+  const renderBtn = h("button", { class: "btn btn-primary", style: "width: 100%;", disabled: !vo.available },
+    vo.available ? "Render Short" : "OmniVoice offline — start it first",
+  );
+  const status = h("div", { class: "mt-16" });
+
+  renderBtn.addEventListener("click", async () => {
+    if (!scriptInput.value.trim()) {
+      status.appendChild(h("div", { class: "alert alert-warn" }, "Write the script first."));
+      return;
+    }
+    if (!sourceInput.value.trim()) {
+      status.appendChild(h("div", { class: "alert alert-warn" }, `Add the ${slug === "storytelling" ? "background" : "source clip"}.`));
+      return;
+    }
+    renderBtn.disabled = true;
+    clear(status);
+    status.appendChild(h("div", { class: "row" },
+      h("div", { class: "spinner" }),
+      slug === "storytelling"
+        ? "Synthesizing VO → transcribing → compositing gameplay… (60-120s)"
+        : "Fetching source → VO → captions → mix… (60-120s)",
+    ));
+    const body = {
+      format: formatTag,
+      script: scriptInput.value,
+      voice: voiceSelect.value,
+      title: titleInput.value || null,
+      speed: parseFloat(speedInput.value) || null,
+      language: langInput.value || null,
+      [slug === "storytelling" ? "background" : "source"]: sourceInput.value,
+      ...(duckInput ? { duck_volume: parseFloat(duckInput.value) || 0.25 } : {}),
+    };
+    try {
+      const out = await api.post("/api/studio/render", body);
+      clear(status);
+      const dl = h("a", { class: "btn btn-primary btn-sm", href: out.path, download: "" }, "↓ Download MP4");
+      dl.addEventListener("click", () => setTimeout(() => location.reload(), 800));
+      status.appendChild(h("div", { class: "alert alert-info" },
+        "✓ Rendered. ", dl,
+      ));
+    } catch (err) {
+      renderBtn.disabled = false;
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-error" }, `⚠ ${err.message}`));
+    }
+  });
+
+  page.appendChild(h("div", { class: "panel", style: "max-width: 760px;" },
+    h("div", { class: "field" }, h("label", {}, sourceLabel), sourceInput),
+    h("div", { class: "field" }, h("label", {}, "Script (will be spoken by the VO)"), scriptInput),
+    h("div", { class: "field" }, h("label", {}, "Hook title"), titleInput),
+    h("div", { class: "field-row" },
+      h("div", { class: "field" }, h("label", {}, "Voice"), voiceSelect),
+      h("div", { class: "field" }, h("label", {}, "Speed"), speedInput),
+      h("div", { class: "field" }, h("label", {}, "Language"), langInput),
+    ),
+    duckInput && h("div", { class: "field" }, h("label", {}, "Original clip duck volume (0-1)"), duckInput),
+    renderBtn,
+    status,
+  ));
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────

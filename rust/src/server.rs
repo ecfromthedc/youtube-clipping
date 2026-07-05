@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::{captions, clip, config, listicle, srt, transcribe};
+use crate::{captions, clip, commentary, config, listicle, srt, story, transcribe, voice};
 
 /// Embedded static frontend (rust-embed) — bundled at compile time.
 #[derive(RustEmbed)]
@@ -63,6 +63,10 @@ struct Project {
     renders: Vec<Render>,
     /// Ranking-listicle compilations produced from this project.
     compiles: Vec<Render>,
+    /// Storytelling-format renders (script → VO → gameplay bg).
+    stories: Vec<Render>,
+    /// Commentary-format renders (source clip + VO + ducked audio).
+    commentary: Vec<Render>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -98,6 +102,11 @@ fn source_video(root: &Path, id: &str) -> PathBuf {
     project_dir(root, id).join("source.mp4")
 }
 
+/// Serializes OmniVoice calls. The local Studio server lazy-loads the model and an
+/// asyncio lock inside it crosses event loops if two requests hit on first load, so
+/// we keep it strictly one-at-a-time at the editor layer too.
+static STUDIO_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 // ── entrypoint ────────────────────────────────────────────────────────────────
 
 /// Boot the editor server. `port` 0 lets the OS pick (used in tests).
@@ -120,6 +129,9 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/projects/:id/transcribe", post(transcribe_project))
         .route("/api/projects/:id/render", post(render_clip))
         .route("/api/projects/:id/compile", post(compile_project))
+        .route("/api/studio/render", post(studio_render))
+        .route("/api/studio/source-clip", post(studio_source_clip))
+        .route("/api/voices", get(list_voices_route))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
@@ -182,6 +194,8 @@ async fn create_project(
         candidates: vec![],
         renders: vec![],
         compiles: vec![],
+        stories: vec![],
+        commentary: vec![],
     };
     s.projects.write().await.insert(id.clone(), p);
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
@@ -558,6 +572,204 @@ async fn compile_project(
     })))
 }
 
+// ── Studio: format-aware renderer (storytelling / commentary) ─────────────────
+
+#[derive(Deserialize)]
+#[serde(tag = "format", rename_all = "lowercase")]
+enum StudioBody {
+    /// Script → VO → looping background → captions → 9:16.
+    Story {
+        script: String,
+        voice: Option<String>,
+        /// URL or path to the background footage (gameplay/Minecraft). Resolved via
+        /// yt-dlp if it's a URL, used as-is if it's an existing local path.
+        background: String,
+        title: Option<String>,
+        speed: Option<f32>,
+        language: Option<String>,
+        /// Optional project id to associate the output with (shows in dashboard).
+        project: Option<String>,
+    },
+    /// Source clip + commentary script + VO + ducked original audio + captions.
+    Commentary {
+        /// URL or path to the source clip.
+        source: String,
+        script: String,
+        voice: Option<String>,
+        title: Option<String>,
+        speed: Option<f32>,
+        language: Option<String>,
+        duck_volume: Option<f32>,
+        project: Option<String>,
+    },
+}
+
+/// Format-dispatching render endpoint. POST {format: "story"|"commentary", ...}.
+/// Serialized through STUDIO_MUTEX so we never issue concurrent OmniVoice calls
+/// (the local server lazy-loads the model and an asyncio lock crosses event loops
+/// if you fire two requests at once on first load).
+async fn studio_render(
+    State(s): State<AppState>,
+    Json(body): Json<StudioBody>,
+) -> Result<Json<Value>, AppError> {
+    let root = s.root.clone();
+    let _guard = STUDIO_MUTEX.lock().await;
+    let result = tokio::task::spawn_blocking(move || -> Result<(String, String)> {
+        match body {
+            StudioBody::Story { script, voice, background, title, speed, language, project } => {
+                let bg = resolve_source(&root, &background, "background")?;
+                let opts = story::StoryOpts {
+                    script,
+                    voice: voice.unwrap_or_else(|| "default".to_string()),
+                    background: bg,
+                    title,
+                    speed,
+                    language,
+                };
+                let (id, out_path) = studio_output_path(&root, project.as_deref(), "stories")?;
+                story::render(&root, &opts, &out_path)?;
+                if let Some(t) = opts.title.as_ref() {
+                    let _ = std::fs::write(format!("{}.title", out_path.display()), t);
+                }
+                Ok((id, out_path.to_string_lossy().into_owned()))
+            }
+            StudioBody::Commentary { source, script, voice, title, speed, language, duck_volume, project } => {
+                let src = resolve_source(&root, &source, "source")?;
+                let opts = commentary::CommentaryOpts {
+                    source: src,
+                    script,
+                    voice: voice.unwrap_or_else(|| "default".to_string()),
+                    title,
+                    speed,
+                    language,
+                    duck_volume: duck_volume.unwrap_or(0.25),
+                };
+                let title_clone = opts.title.clone();
+                let (id, out_path) = studio_output_path(&root, project.as_deref(), "commentary")?;
+                commentary::render(&root, &opts, &out_path)?;
+                if let Some(t) = title_clone {
+                    let _ = std::fs::write(format!("{}.title", out_path.display()), t);
+                }
+                Ok((id, out_path.to_string_lossy().into_owned()))
+            }
+        }
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))??;
+
+    // Format the path for browser download.
+    let (id, abs_path) = result;
+    let relative = abs_path
+        .strip_prefix(&format!("{}/", s.root.display()))
+        .unwrap_or(&abs_path);
+    let public_path = format!("/api/projects/{id}/files/{}", relative.trim_start_matches("data/editor/").trim_start_matches('/'));
+    // The serve_project_file route takes the path relative to data/editor/<id>/.
+    // For studio outputs we wrote into data/editor/<id>/<subdir>/<stamp>.mp4 — derive that.
+    let download_path = format_relative_for_download(&s.root, std::path::Path::new(&abs_path), &id);
+    Ok(Json(json!({
+        "path": download_path,
+        "project": id,
+    })))
+}
+
+/// yt-dlp fetch a URL → local mp4 (or pass-through if already a local path).
+/// Used by studio_render to source background footage or commentary clips.
+async fn studio_source_clip(
+    State(s): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<Value>, AppError> {
+    let url = body
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError(anyhow!("missing 'url' field")))?;
+    let root = s.root.clone();
+    let url_owned = url.to_string();
+    let _guard = STUDIO_MUTEX.lock().await;
+    let local = tokio::task::spawn_blocking(move || -> Result<String> {
+        let local = resolve_source(&root, &url_owned, "source")?;
+        Ok(local.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))??;
+    Ok(Json(json!({ "path": local })))
+}
+
+/// GET /api/voices — list OmniVoice voice profiles (empty if server's not running).
+async fn list_voices_route(State(s): State<AppState>) -> Json<Value> {
+    let root = s.root.clone();
+    let voices = tokio::task::spawn_blocking(move || voice::list_voices(&root))
+        .await
+        .unwrap_or_default();
+    let available = voice::available(&s.root);
+    Json(json!({
+        "available": available,
+        "voices": voices.into_iter().map(|(id, name)| {
+            json!({ "id": id, "name": name })
+        }).collect::<Vec<_>>(),
+    }))
+}
+
+/// Resolve a source spec (URL → yt-dlp download, else local path). `kind` is just for
+/// error messages. Runs synchronously — callers should be on the blocking pool.
+fn resolve_source(root: &Path, spec: &str, kind: &str) -> Result<std::path::PathBuf> {
+    if spec.starts_with("http://") || spec.starts_with("https://") {
+        // yt-dlp into a per-source temp dir.
+        let hash = {
+            use sha1::{Digest, Sha1};
+            let mut h = Sha1::new();
+            h.update(spec.as_bytes());
+            let digest = h.finalize();
+            digest.iter().take(4).map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        let dir = config::data_dir(root).join("studio").join("sources").join(&hash);
+        std::fs::create_dir_all(&dir)?;
+        let out = dir.join("source.mp4");
+        if out.exists() {
+            return Ok(out); // cached
+        }
+        let status = std::process::Command::new("yt-dlp")
+            .args(["-f", "mp4/best", "--no-warnings", "-o"])
+            .arg(&out)
+            .arg(spec)
+            .status()?;
+        if !status.success() || !out.exists() {
+            bail!("yt-dlp failed to fetch {kind}: {spec}");
+        }
+        Ok(out)
+    } else {
+        let p = std::path::PathBuf::from(spec);
+        if !p.exists() {
+            bail!("{kind} not found: {spec}");
+        }
+        Ok(p)
+    }
+}
+
+/// Build the output path for a studio render: data/editor/<id>/<subdir>/<stamp>.mp4.
+/// `project` may be None → a fresh synthetic project id is allocated.
+fn studio_output_path(root: &Path, project: Option<&str>, subdir: &str) -> Result<(String, std::path::PathBuf)> {
+    let id = match project {
+        Some(id) if !id.is_empty() => id.to_string(),
+        _ => uuid::Uuid::new_v4().to_string()[..8].to_string(),
+    };
+    let dir = config::data_dir(root).join("editor").join(&id).join(subdir);
+    std::fs::create_dir_all(&dir)?;
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string();
+    Ok((id, dir.join(format!("{stamp}.mp4"))))
+}
+
+/// Convert an absolute output path into the form the serve_project_file route expects:
+/// /api/projects/<id>/files/<subdir>/<stamp>.mp4
+fn format_relative_for_download(root: &Path, abs_path: &Path, id: &str) -> String {
+    let proj_dir = config::data_dir(root).join("editor").join(id);
+    if let Ok(rel) = abs_path.strip_prefix(&proj_dir) {
+        let rel_str = rel.to_string_lossy().trim_start_matches('/').to_string();
+        return format!("/api/projects/{id}/files/{rel_str}");
+    }
+    // Fallback: just serve the absolute path raw (will 404, but the error is debuggable).
+    format!("/api/projects/{id}/files/{}", abs_path.file_name().unwrap_or_default().to_string_lossy())
+}
+
 // ── routes — static + project files ───────────────────────────────────────────
 
 /// Serve `/` and the SPA shell.
@@ -692,6 +904,8 @@ async fn warm_cache(s: &AppState) {
                 .unwrap_or(0.0);
             let renders = scan_renders_dir(&dir.join("renders"), "renders");
             let compiles = scan_renders_dir(&dir.join("compiles"), "compiles");
+            let stories = scan_renders_dir(&dir.join("stories"), "stories");
+            let commentary = scan_renders_dir(&dir.join("commentary"), "commentary");
             // Re-plan candidates from the transcript if it exists.
             let segs: Vec<srt::Segment> = transcript
                 .iter()
@@ -717,7 +931,7 @@ async fn warm_cache(s: &AppState) {
                 .unwrap_or_else(|| "upload.mp4".into());
             out.push((
                 id.clone(),
-                Project { id, filename, duration, transcript, candidates: cands, renders, compiles },
+                Project { id, filename, duration, transcript, candidates: cands, renders, compiles, stories, commentary },
             ));
         }
         let _ = root; // touch root to keep the closure's intent clear (future: re-probe durations)

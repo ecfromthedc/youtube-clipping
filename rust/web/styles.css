@@ -840,3 +840,75 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   color: white;
   box-shadow: var(--razor-top), var(--razor-bottom);
 }
+
+/* ── Studio: format picker ─────────────────────────────────────────────────── */
+
+.format-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.format-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: linear-gradient(145deg, rgba(24, 30, 39, 0.86), rgba(9, 13, 20, 0.94));
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--razor-top), var(--razor-bottom);
+  transition: all 0.2s;
+  cursor: pointer;
+  color: var(--ink);
+  text-decoration: none;
+}
+.format-card:hover {
+  border-color: var(--accent-3);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(225,0,195,0.3), var(--razor-top);
+  text-decoration: none;
+}
+
+.format-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--brand-gradient);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  box-shadow: 0 6px 16px rgba(225,0,195,0.4), var(--razor-top), var(--razor-bottom);
+}
+
+.format-name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.format-blurb {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.format-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.format-meta .pill-warn {
+  background: rgba(249, 156, 0, 0.16);
+  color: var(--warn);
+}
+
+.format-cta {
+  color: var(--accent-3);
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 4px;
+}
