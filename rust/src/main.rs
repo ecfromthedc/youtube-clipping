@@ -19,6 +19,7 @@ mod qc;
 mod reframe;
 mod scoreboard;
 mod scoring;
+mod server;
 mod sourcing;
 mod srt;
 mod transcribe;
@@ -166,6 +167,14 @@ enum Cmd {
         /// Don't burn the hook title + CTA overlay.
         #[arg(long)]
         no_hook: bool,
+    },
+    /// Launch the Tides & Ships editor — a browser UI over the clip pipeline.
+    /// Internal team tool: upload footage → see ranked clip moments → render a
+    /// captioned 9:16 MP4. No DB/auth/billing; projects live in data/editor/.
+    Serve {
+        /// Port to bind (default 8787).
+        #[arg(short, long, default_value_t = 8787)]
+        port: u16,
     },
 }
 
@@ -384,6 +393,15 @@ fn main() -> Result<()> {
             if results.iter().any(|r| !r.ok) {
                 std::process::exit(1);
             }
+        }
+        Cmd::Serve { port } => {
+            // tokio runtime — axum needs it. The DB conn opened above is dropped here;
+            // the editor doesn't use it (state lives in data/editor/).
+            drop(conn);
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(server::run(&root, port))?;
         }
     }
     Ok(())

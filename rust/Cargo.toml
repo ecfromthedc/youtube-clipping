@@ -28,6 +28,14 @@ ab_glyph = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 sha1 = "0.10"   # clip-id = sha1(url)[:8], byte-identical to Python hashlib.sha1
 
+# --- web server (ycp serve) — wraps the pipeline in a browser editor for the team ---
+axum = { version = "0.7", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+rust-embed = "8"        # embed web/ assets into the binary → still single-file to ship
+uuid = { version = "1", features = ["v4"] }
+mime_guess = "2"
+
 [profile.release]
 lto = true        # lean, fast single binary to ship to teammates
 strip = true

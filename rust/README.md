@@ -14,7 +14,46 @@ Python env per machine; compile-time safety kills cross-machine dependency drift
 ```
 cd rust && cargo build --release
 ./target/release/ycp status        # cross-checks against the Python output
+./target/release/ycp serve         # Tides & Ships editor → http://localhost:8787
 ```
+
+## Tides & Ships editor (`ycp serve`)
+
+A browser UI over the clip pipeline — internal team tool, no auth/billing. Drop in
+raw footage → the pipeline transcribes it + ranks your best moments → pick one on
+the timeline → render a captioned 9:16 MP4. Runs entirely against the existing
+Rust modules; nothing in the pipeline is duplicated.
+
+**One-time setup on a team machine:**
+```
+brew install ffmpeg yt-dlp whisper-cpp   # or: ./scripts/setup-whisper.sh
+cd rust && cargo build --release
+./target/release/ycp serve --port 8787
+```
+
+**What each step actually runs:**
+| Step | Module | What happens |
+|------|--------|--------------|
+| Upload | `server.rs` | multipart → `data/editor/<id>/source.mp4` + ffprobe duration |
+| Transcribe | `transcribe.rs` | whisper.cpp (or openai-whisper) → word-level SRT |
+| Plan clips | `clip::plan_clips` | groups segments into 15–38s windows, scores by hook strength |
+| Render | `clip::cut_vertical` + `captions::burn_captions` | ffmpeg trim → 9:16 reframe → ab_glyph opus-style captions |
+| Persist | `warm_cache` | on restart, rebuilds project state from disk |
+
+**API surface** (everything else is static frontend):
+- `GET  /api/health`
+- `GET  /api/projects` — list
+- `POST /api/projects` `{filename?}` → `{id}`
+- `GET  /api/projects/:id` — full project (transcript + candidates + renders)
+- `DELETE /api/projects/:id`
+- `POST /api/projects/:id/upload` (multipart `file`) → `{id, duration}`
+- `POST /api/projects/:id/transcribe` `{min_len?, max_len?, top?}` → updated project
+- `POST /api/projects/:id/render` `{start, end, title?}` → `{path, duration}`
+- `GET  /api/projects/:id/files/<path>` — stream source.mp4 or renders
+
+**Project state** lives in `data/editor/<id>/`: `source.mp4`, `transcript.json`,
+`duration.txt`, `filename.txt`, `renders/*.mp4`. Delete a project by deleting its
+folder, or via the dashboard trash button.
 
 ## Port status (parity-checked against Python, module by module)
 
