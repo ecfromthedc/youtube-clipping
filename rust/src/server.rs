@@ -419,6 +419,10 @@ async fn render_clip(
             }
         }
         let _ = std::fs::remove_dir_all(&workdir);
+        // Sidecar title.txt so warm_cache can rebuild the render's title after restart.
+        if let Some(t) = title_for_task.as_ref() {
+            let _ = std::fs::write(renders_dir.join(format!("{out_name}.title")), t);
+        }
         let duration = end - start;
         Ok((format!("renders/{out_name}"), duration))
     })
@@ -560,14 +564,21 @@ async fn warm_cache(s: &AppState) {
             let renders_root = dir.join("renders");
             let mut renders = Vec::new();
             if let Ok(rd) = std::fs::read_dir(&renders_root) {
+                let mut mp4s: Vec<(String, PathBuf)> = Vec::new();
                 for entry in rd.flatten() {
                     if entry.path().extension().and_then(|e| e.to_str()) == Some("mp4") {
                         let name = entry.file_name().to_string_lossy().to_string();
-                        renders.push(Render {
-                            path: format!("renders/{name}"),
-                            title: String::new(),
-                        });
+                        mp4s.push((name, entry.path()));
                     }
+                }
+                mp4s.sort_by(|a, b| a.0.cmp(&b.0));
+                for (name, path) in mp4s {
+                    let title = std::fs::read_to_string(format!("{}.title", path.display()))
+                        .unwrap_or_default();
+                    renders.push(Render {
+                        path: format!("renders/{name}"),
+                        title,
+                    });
                 }
             }
             // Re-plan candidates from the transcript if it exists.
