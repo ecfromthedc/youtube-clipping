@@ -217,6 +217,17 @@ pub struct PostizAdapter {
 }
 
 impl PostizAdapter {
+    /// Direct constructor (used by the editor's per-publish path: it picks the
+    /// integration id at the call site rather than from settings.yaml).
+    pub fn new(token: String, api_url: String, channels: std::collections::HashMap<String, String>, schedule: String) -> Self {
+        Self {
+            token,
+            api_url: api_url.trim_end_matches('/').to_string(),
+            channels,
+            schedule,
+        }
+    }
+
     pub fn from_config(pz: &Yaml) -> Result<Self> {
         let token_env = pz.get("token_env").and_then(|v| v.as_str()).unwrap_or("POSTIZ_API_TOKEN");
         // Mirrors Python: reads os.environ only (not the .env loader).
@@ -512,7 +523,7 @@ mod tests {
         // The hashtags block from config/settings.yaml (the bits the tests touch).
         serde_yaml::from_str(
             "distribution:\n  hashtags:\n    default: [\"#shorts\"]\n    \
-             phoenix-protocol: [\"#shorts\", \"#longevity\", \"#health\"]\n",
+             money-fights: [\"#shorts\", \"#money\", \"#investing\"]\n",
         )
         .unwrap()
     }
@@ -541,10 +552,10 @@ mod tests {
     fn caption_includes_channel_hashtags() {
         let cap = caption_for(
             &settings(),
-            &clip("auto-clip", Some("muscle is the organ of longevity:"), None, Some("phoenix-protocol")),
+            &clip("auto-clip", Some("they make 400k and still fight:"), None, Some("money-fights")),
         );
-        assert!(cap.starts_with("muscle is the organ of longevity:"));
-        assert!(cap.contains("#longevity") && cap.contains("#health"));
+        assert!(cap.starts_with("they make 400k and still fight:"));
+        assert!(cap.contains("#money") && cap.contains("#investing"));
     }
 
     #[test]

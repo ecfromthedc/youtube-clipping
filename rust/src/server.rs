@@ -32,7 +32,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::{captions, clip, commentary, config, listicle, srt, story, transcribe, voice};
+use crate::{captions, clip, commentary, config, distribute, listicle, srt, story, transcribe, voice};
+// Adapter::deliver is a trait method — bring it into scope for the publish path.
+use distribute::Adapter;
 
 /// Embedded static frontend (rust-embed) — bundled at compile time.
 #[derive(RustEmbed)]
@@ -132,6 +134,8 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/studio/render", post(studio_render))
         .route("/api/studio/source-clip", post(studio_source_clip))
         .route("/api/voices", get(list_voices_route))
+        .route("/api/postiz/integrations", get(list_postiz_integrations))
+        .route("/api/postiz/publish", post(publish_to_postiz))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
@@ -707,6 +711,151 @@ async fn list_voices_route(State(s): State<AppState>) -> Json<Value> {
             json!({ "id": id, "name": name })
         }).collect::<Vec<_>>(),
     }))
+}
+
+// ── Postiz: list integrations + publish ──────────────────────────────────────
+//
+// Reuses distribute::PostizAdapter (the production posting path). The autopilot
+// orchestrator runs the whole queue through run(); these routes expose the same
+// adapter for one-off "publish this render now" calls from the editor.
+
+/// GET /api/postiz/integrations — proxy the live Postiz integrations list so the
+/// UI can show a channel picker. Returns `{available, token_configured, integrations:[]}`.
+async fn list_postiz_integrations(State(s): State<AppState>) -> Json<Value> {
+    let token = config::env_var(&s.root, "POSTIZ_API_TOKEN");
+    let api_url = std::env::var("POSTIZ_API_URL").unwrap_or_else(|_| {
+        config::load_settings(&s.root)
+            .ok()
+            .and_then(|y| y["distribution"]["postiz"]["api_url"].as_str().map(String::from))
+            .unwrap_or_else(|| "https://api.postiz.com/public/v1".to_string())
+    });
+
+    let token_clone = token.clone();
+    let api_clone = api_url.clone();
+    let integrations = tokio::task::spawn_blocking(move || -> Result<Vec<Value>> {
+        let token = match token_clone.as_ref() {
+            Some(t) if !t.is_empty() => t.clone(),
+            _ => bail!("POSTIZ_API_TOKEN not set"),
+        };
+        let resp = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?
+            .get(format!("{api_clone}/integrations"))
+            .header("Authorization", token)
+            .send()?;
+        if !resp.status().is_success() {
+            bail!("Postiz HTTP {}", resp.status());
+        }
+        Ok(resp.json::<Vec<Value>>()?)
+    })
+    .await
+    .map(|r| r.unwrap_or_default())
+    .unwrap_or_default();
+
+    Json(json!({
+        "available": !integrations.is_empty(),
+        "token_configured": token.is_some(),
+        "api_url": api_url,
+        "integrations": integrations,
+    }))
+}
+
+/// POST /api/postiz/publish — publish one rendered MP4 to a chosen Postiz integration.
+///
+/// Body: `{ path, integration_id, title, caption?, platform?, privacy?, schedule?, date? }`
+/// `path` is the editor-relative path returned by /render|/compile|/studio/render,
+/// e.g. `/api/projects/<id>/files/renders/<stamp>.mp4`. We resolve it to the on-disk
+/// absolute path, then hand off to PostizAdapter.deliver() which does the upload + post.
+#[derive(Deserialize)]
+struct PublishBody {
+    /// Editor-relative URL path of the rendered file to publish.
+    path: String,
+    /// Postiz integration id (from GET /api/postiz/integrations).
+    integration_id: String,
+    title: String,
+    #[serde(default)]
+    caption: Option<String>,
+    #[serde(default)]
+    platform: Option<String>,
+    #[serde(default)]
+    privacy: Option<String>,
+    /// "now" (default) or "schedule".
+    #[serde(default)]
+    schedule: Option<String>,
+    /// ISO-8601 schedule time (only used when schedule="schedule").
+    #[serde(default)]
+    date: Option<String>,
+}
+async fn publish_to_postiz(
+    State(s): State<AppState>,
+    Json(body): Json<PublishBody>,
+) -> Result<Json<Value>, AppError> {
+    // Resolve the editor path back to an absolute on-disk path.
+    // Format: /api/projects/<id>/files/<rel>
+    let abs = resolve_editor_path(&s.root, &body.path)?;
+    if !abs.exists() {
+        return Err(AppError(anyhow!("rendered file not found on disk: {}", abs.display())));
+    }
+
+    let settings = config::load_settings(&s.root).ok().unwrap_or_else(|| serde_yaml::Value::Null);
+    let api_url = std::env::var("POSTIZ_API_URL").unwrap_or_else(|_| {
+        settings["distribution"]["postiz"]["api_url"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_else(|| "https://api.postiz.com/public/v1".to_string())
+    });
+    let token = config::env_var(&s.root, "POSTIZ_API_TOKEN")
+        .ok_or_else(|| AppError(anyhow!("POSTIZ_API_TOKEN not set — add it to .env")))?;
+
+    // Build a one-shot adapter with the chosen integration id directly (bypasses the
+    // channels map in settings.yaml — the editor picks the channel per publish, so
+    // we don't require a pre-mapped slug).
+    let integration_id = body.integration_id.clone();
+    let schedule_type = body.schedule.clone().unwrap_or_else(|| "now".to_string());
+    let mut channels = std::collections::HashMap::new();
+    channels.insert("__editor__".to_string(), integration_id.clone());
+
+    let adapter = distribute::PostizAdapter::new(token, api_url, channels, schedule_type);
+    let meta = distribute::DeliverMeta {
+        clip_id: None,
+        caption: body.caption.clone().unwrap_or_else(|| body.title.clone()),
+        title: Some(body.title.clone()),
+        channel: Some("__editor__".to_string()),
+        platform: body.platform.clone().or_else(|| Some("youtube".to_string())),
+        privacy: body.privacy.clone().or_else(|| Some("public".to_string())),
+        date: body.date.clone(),
+    };
+
+    let abs_for_task = abs.clone();
+    let adapter_for_task = adapter;
+    let meta_for_task = meta;
+    let _guard = STUDIO_MUTEX.lock().await; // reuse the serialize-mutex — uploads are heavy
+    let result = tokio::task::spawn_blocking(move || -> Result<(String, )> {
+        let post_id = adapter_for_task.deliver(&abs_for_task, &meta_for_task)?;
+        Ok((post_id,))
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))??;
+
+    Ok(Json(json!({
+        "ok": true,
+        "post_id": result.0,
+        "integration_id": integration_id,
+        "title": body.title,
+    })))
+}
+
+/// Translate a `/api/projects/<id>/files/<rel>` URL into the absolute on-disk path.
+fn resolve_editor_path(root: &Path, url_path: &str) -> Result<PathBuf> {
+    // Reject any traversal.
+    if url_path.contains("..") {
+        bail!("bad path");
+    }
+    let prefix = "/api/projects/";
+    let rest = url_path.strip_prefix(prefix).ok_or_else(|| anyhow!("not an editor path"))?;
+    let (id, after) = rest.split_once("/files/").ok_or_else(|| anyhow!("malformed editor path"))?;
+    let abs = config::data_dir(root).join("editor").join(id).join(after);
+    Ok(abs)
 }
 
 /// Resolve a source spec (URL → yt-dlp download, else local path). `kind` is just for

@@ -547,7 +547,7 @@ function rendersList(project) {
         h("div", { class: "render-title" }, r.title || "untitled"),
         h("div", { class: "render-meta" }, r.path.split("/").pop()),
       ),
-      h("a", { class: "btn btn-ghost btn-sm", href: `/api/projects/${project.id}/files/${r.path}`, download: "" }, "↓"),
+      renderCardActions(project.id, r.path, r.title),
     ));
   }
   section.appendChild(list);
@@ -566,7 +566,7 @@ function _studioOutputList(project, items, title, icon, badgeColor) {
         h("div", { class: "render-title" }, r.title || "untitled"),
         h("div", { class: "render-meta" }, r.path.split("/").pop()),
       ),
-      h("a", { class: "btn btn-ghost btn-sm", href: `/api/projects/${project.id}/files/${r.path}`, download: "" }, "↓"),
+      renderCardActions(project.id, r.path, r.title),
     ));
   }
   section.appendChild(list);
@@ -587,7 +587,7 @@ function compilesList(project) {
         h("div", { class: "render-title" }, r.title || "ranking compilation"),
         h("div", { class: "render-meta" }, r.path.split("/").pop()),
       ),
-      h("a", { class: "btn btn-ghost btn-sm", href: `/api/projects/${project.id}/files/${r.path}`, download: "" }, "↓"),
+      renderCardActions(project.id, r.path, r.title),
     ));
   }
   section.appendChild(list);
@@ -904,6 +904,117 @@ async function studioFormatPage(page, slug) {
     renderBtn,
     status,
   ));
+}
+
+// ── Publish modal — Postiz publishing from any rendered card ───────────
+async function openPublishModal(projectId, renderPath, suggestedTitle) {
+  // Fetch integrations
+  const root = document.createElement("div");
+  root.className = "modal-backdrop";
+  const modal = h("div", { class: "modal", style: "max-width: 540px;" },
+    h("h3", {}, "📤 Publish to Postiz"),
+    h("p", { class: "muted", style: "font-size: 13px; margin: 0 0 16px;" },
+      "Uploads the MP4 + creates a post on the chosen YouTube channel via Postiz.",
+    ),
+  );
+  root.appendChild(modal);
+  document.body.appendChild(root);
+  root.addEventListener("click", (e) => { if (e.target === root) root.remove(); });
+
+  modal.appendChild(h("div", { class: "row" }, h("div", { class: "spinner" }), "Loading channels…"));
+  const data = await api.get("/api/postiz/integrations").catch(() => null);
+  // Clear spinner
+  while (modal.children.length > 2) modal.removeChild(modal.lastChild);
+
+  if (!data || !data.available) {
+    modal.appendChild(h("div", { class: "alert alert-error" },
+      !data || data.token_configured === false
+        ? "POSTIZ_API_TOKEN not configured. Add it to .env."
+        : "Couldn't reach Postiz. Check the token + network.",
+    ));
+    modal.appendChild(h("div", { class: "modal-actions" },
+      h("button", { class: "btn", onclick: () => root.remove() }, "Close"),
+    ));
+    return;
+  }
+
+  const integrations = (data.integrations || []).filter((i) => i.identifier === "youtube" && !i.disabled);
+  const chanSelect = h("select", { class: "select" },
+    ...integrations.map((i) => h("option", { value: i.id }, `${i.name} (@${(i.profile || "").replace(/^@/, "")})`)),
+  );
+  const titleInput = h("input", { class: "input", value: suggestedTitle || "", placeholder: "YouTube title (≤100 chars)" });
+  const captionInput = h("textarea", { class: "textarea", style: "min-height: 60px;", placeholder: "Description (default: title + #shorts)" });
+  const scheduleToggle = h("div", { class: "compile-order-toggle", style: "margin-top: 4px;" });
+  let schedMode = "now";
+  const nowBtn = h("button", { class: "compile-order-btn active" }, "⚡ Post now");
+  const schedBtn = h("button", { class: "compile-order-btn" }, "📅 Schedule");
+  nowBtn.addEventListener("click", () => { schedMode = "now"; nowBtn.classList.add("active"); schedBtn.classList.remove("active"); });
+  schedBtn.addEventListener("click", () => { schedMode = "schedule"; schedBtn.classList.add("active"); nowBtn.classList.remove("active"); });
+  scheduleToggle.appendChild(nowBtn);
+  scheduleToggle.appendChild(schedBtn);
+
+  const publishBtn = h("button", { class: "btn btn-primary", style: "width: 100%; margin-top: 12px;" }, "📤 Publish");
+  const status = h("div", { class: "mt-8" });
+
+  publishBtn.addEventListener("click", async () => {
+    if (!titleInput.value.trim()) {
+      status.appendChild(h("div", { class: "alert alert-warn" }, "Add a title first."));
+      return;
+    }
+    publishBtn.disabled = true;
+    clear(status);
+    status.appendChild(h("div", { class: "row" },
+      h("div", { class: "spinner" }),
+      "Uploading to Postiz + creating post… (30-90s)",
+    ));
+    try {
+      const out = await api.post("/api/postiz/publish", {
+        path: renderPath,
+        integration_id: chanSelect.value,
+        title: titleInput.value,
+        caption: captionInput.value || null,
+        schedule: schedMode,
+      });
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-info" },
+        `✓ Published. Postiz post id: `, h("span", { class: "mono" }, out.post_id),
+      ));
+      publishBtn.textContent = "✓ Done";
+    } catch (err) {
+      publishBtn.disabled = false;
+      clear(status);
+      status.appendChild(h("div", { class: "alert alert-error" }, `⚠ ${err.message}`));
+    }
+  });
+
+  modal.append(
+    h("div", { class: "field" }, h("label", {}, "Channel"), chanSelect),
+    h("div", { class: "field" }, h("label", {}, "Title"), titleInput),
+    h("div", { class: "field" }, h("label", {}, "Description (optional)"), captionInput),
+    h("div", { class: "field" }, h("label", {}, "When"), scheduleToggle),
+    publishBtn,
+    status,
+    h("div", { class: "modal-actions" },
+      h("button", { class: "btn btn-ghost", onclick: () => root.remove() }, "Close"),
+    ),
+  );
+}
+
+// Wrap a render card's existing download button + add a publish button.
+function renderCardActions(projectId, renderPath, title) {
+  return h("div", { class: "row" },
+    h("a", {
+      class: "btn btn-ghost btn-sm",
+      href: `/api/projects/${projectId}/files/${renderPath}`,
+      download: "",
+      title: "Download",
+    }, "↓"),
+    h("button", {
+      class: "btn btn-primary btn-sm",
+      title: "Publish to Postiz",
+      onclick: () => openPublishModal(projectId, `/api/projects/${projectId}/files/${renderPath}`, title),
+    }, "📤"),
+  );
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────
