@@ -194,12 +194,14 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   background: radial-gradient(ellipse, rgba(255,255,255,0.7) 0%, transparent 70%);
   pointer-events: none;
 }
-.brand-mark.clay svg {
-  width: 20px;
-  height: 20px;
+.brand-mark.clay svg,
+.brand-mark.clay .brand-mark-img {
+  width: 22px;
+  height: 22px;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5)) drop-shadow(0 0 2px rgba(255,255,255,0.3));
   position: relative;
   z-index: 1;
+  display: block;
 }
 
 .brand-mark svg { width: 18px; height: 18px; }
@@ -1041,3 +1043,68 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
 .health-green { background: var(--good); box-shadow: 0 0 8px var(--good); }
 .health-yellow { background: var(--warn); }
 .health-red { background: var(--bad); }
+
+/* ── Page Agent floating trigger (claymorphic, matches brand bead) ─────── */
+.pa-trigger {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55) 0%, transparent 45%),
+    linear-gradient(145deg, #ff4ce0 0%, #c400a8 45%, #6a00b0 100%);
+  color: white;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2147483645; /* sits above page-agent panel but below nothing important */
+  /* claymorphic stack */
+  box-shadow:
+    0 8px 22px rgba(133, 0, 215, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.55),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.75),
+    inset -3px -3px 7px rgba(79, 0, 70, 0.55),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.pa-trigger::after {
+  /* gloss specular dot, same as brand bead */
+  content: "";
+  position: absolute;
+  top: 16%;
+  left: 22%;
+  width: 28%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.75) 0%, transparent 70%);
+  pointer-events: none;
+}
+.pa-trigger svg {
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5));
+  position: relative;
+  z-index: 1;
+  animation: pa-sparkle 2.5s ease-in-out infinite;
+}
+.pa-trigger:hover {
+  transform: translateY(-2px) scale(1.06);
+  box-shadow:
+    0 12px 28px rgba(133, 0, 215, 0.6),
+    0 3px 8px rgba(0, 0, 0, 0.45),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.55),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.75),
+    inset -3px -3px 7px rgba(79, 0, 70, 0.55),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.4);
+}
+@keyframes pa-sparkle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  50%      { transform: rotate(8deg) scale(1.08); }
+}
+
+/* Make sure the page-agent panel sits above our trigger when open */
+#page-agent-runtime_agent-panel {
+  z-index: 2147483646 !important;
+}

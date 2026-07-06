@@ -68,21 +68,11 @@ const h = (tag, props = {}, ...children) => {
 };
 const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); };
 
-// ── Brand mark (SVG tiller/wheel + wave) ───────────────────────────────
-// Claymorphic styling applied via .brand-mark.clay in styles.css.
-//
-// LOGO SWAP: when the real logo asset is ready, drop it at
-//   rust/web/logo.svg  (or .png — embed via rust-embed either way)
-// then replace the BRAND_SVG markup below with:
-//   <img src="/static/logo.svg" alt="Tides Tiller" />
-// The .clay container shape (puffy 3D, gloss dot, layered insets) wraps
-// whatever the inner element is, so the brand treatment is preserved.
-const BRAND_SVG = `<svg viewBox="0 0 64 64" fill="none">
-  <circle cx="32" cy="28" r="14" fill="none" stroke="currentColor" stroke-width="3"/>
-  <circle cx="32" cy="28" r="3" fill="currentColor"/>
-  <path d="M32 14v28M18 28h28M22 18l20 20M42 18L22 38" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M6 50c4 0 4-3 8-3s4 3 8 3 4-3 8-3 4 3 8 3 4-3 8-3 4 3 8 3 4-3 8-3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.7"/>
-</svg>`;
+// ── Brand mark (Rising Tides wave, embedded from logo.svg via rust-embed) ──
+// The white wave icon sits inside a claymorphic bead (see .brand-mark.clay in
+// styles.css). To swap variants, replace rust/web/logo.svg — the binary picks
+// it up at compile time and serves it from /static/logo.svg.
+const BRAND_MARK = `<img src="/static/logo.svg" alt="Tides Tiller" class="brand-mark-img" />`;
 
 // ── Topbar ─────────────────────────────────────────────────────────────
 function topbar(route) {
@@ -90,7 +80,7 @@ function topbar(route) {
     h("a", { class: `nav-link ${route === href ? "active" : ""}`, href: `#${href}` }, label);
   return h("header", { class: "topbar" },
     h("a", { class: "brand", href: "#/" },
-      h("span", { class: "brand-mark clay", html: BRAND_SVG }),
+      h("span", { class: "brand-mark clay", html: BRAND_MARK }),
       h("span", { class: "brand-name" },
       h("span", {}, "Tides"),
       h("span", { class: "amp" }, "·"),
@@ -1196,19 +1186,64 @@ route();
 // bundles the @page-agent/* deps. Lets the team drive the editor by typing
 // ("transcribe this video and compile the top 5"). Uses our /api/llm/proxy
 // route so the DeepSeek key stays server-side.
+//
+// The ESM build's Panel mounts HIDDEN by default and only shows itself on
+// statuschange→running (after .execute() is called). The IIFE demo's Ctrl+/
+// shortcut + floating trigger button come from its autoInit wrapper, NOT the
+// ESM path — so we add our own trigger button + a prompt() to kick off the
+// first task. Once a task starts the panel takes over.
 import { PageAgent } from "https://esm.sh/page-agent@1.11.0";
 
-(async function initPageAgent() {
+(function initPageAgent() {
   if (typeof window === "undefined" || window.__tidesPageAgent) return;
+
+  let agent;
   try {
-    window.__tidesPageAgent = new PageAgent({
+    agent = new PageAgent({
       model: "deepseek-chat",
       baseURL: window.location.origin + "/api/llm/proxy",
       apiKey: "server-side",  // proxy injects DEEPSEEK_API_KEY
       language: "en-US",
+      promptForNextTask: true, // keep panel open + ready for next task after each run
     });
-    console.log("🤖 Tides Tiller Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
+    window.__tidesPageAgent = agent;
   } catch (err) {
     console.warn("Page Agent failed to init:", err);
+    return;
   }
+
+  // Floating trigger button — bottom-right, always visible.
+  const trigger = document.createElement("button");
+  trigger.className = "pa-trigger";
+  trigger.type = "button";
+  trigger.setAttribute("aria-label", "Open Tides Tiller Copilot");
+  trigger.title = "Tides Tiller Copilot (Ctrl+/)";
+  trigger.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L9.5 8.5L3 11l6.5 2.5L12 20l2.5-6.5L21 11l-6.5-2.5L12 2z"/></svg>`;
+  document.body.appendChild(trigger);
+
+  const openCopilot = () => {
+    // If a task is running, the panel is already visible — focus its input.
+    // Otherwise prompt for the task and execute (which mounts + shows the panel).
+    if (agent.status === "running") {
+      const input = document.querySelector("#page-agent-runtime_agent-panel input, #page-agent-runtime_agent-panel textarea");
+      if (input) input.focus();
+      return;
+    }
+    const task = window.prompt("🤖 Tides Tiller Copilot — what should I do?\n\n(e.g. 'go to Studio and render a storytelling short about a teacher')");
+    if (task && task.trim()) {
+      // execute() shows the panel + scrolls in the agent's steps.
+      agent.execute(task.trim()).catch((e) => console.warn("Page Agent execute failed:", e));
+    }
+  };
+  trigger.addEventListener("click", openCopilot);
+
+  // Keyboard shortcut: Ctrl+/ or Cmd+/
+  window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+      e.preventDefault();
+      openCopilot();
+    }
+  });
+
+  console.log("🤖 Tides Tiller Copilot ready. Click the ✨ button (bottom-right) or press Ctrl+/ to chat.");
 })();
