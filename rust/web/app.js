@@ -92,6 +92,7 @@ function topbar(route) {
     h("nav", { class: "topbar-nav" },
       nav("Projects", "/"),
       nav("Studio", "/studio"),
+      nav("Analytics", "/analytics"),
       nav("Pipeline", "/pipeline"),
       h("span", { class: "pill live" }, h("span", { class: "dot" }), "online"),
     ),
@@ -113,6 +114,7 @@ async function route() {
     else if (hash === "/pipeline") await pipelinePage(page);
     else if (hash === "/studio") await studioPage(page);
     else if (hash.startsWith("/studio/")) await studioFormatPage(page, hash.slice(8));
+    else if (hash === "/analytics") await analyticsPage(page);
     else if (hash.startsWith("/p/")) await projectPage(page, hash.slice(3));
     else if (hash.startsWith("/new")) await newProjectPage(page);
     else page.appendChild(h("div", { class: "empty" }, "Not found."));
@@ -905,6 +907,167 @@ async function studioFormatPage(page, slug) {
     status,
   ));
 }
+
+// ── Analytics dashboard — closes the render → publish → MEASURE → tune loop ──
+async function analyticsPage(page) {
+  page.appendChild(h("div", { class: "page-header" },
+    h("div", {},
+      h("h1", { class: "page-title" }, "Analytics"),
+      h("p", { class: "page-sub" },
+        "Channel rollup, top posts, and the 'what's working' recommendations derived from your own data.",
+      ),
+    ),
+    h("div", { class: "row" },
+      h("button", { class: "btn btn-ghost btn-sm", onclick: () => { fetch("/api/analytics/rollup", { method: "GET" }).then(() => location.reload()); } }, "↻ Refresh (1h cache)"),
+    ),
+  ));
+
+  const loading = h("div", { class: "row mb-24" }, h("div", { class: "spinner" }), "Loading analytics…");
+  page.appendChild(loading);
+
+  // Fire all requests in parallel.
+  const [rollup, top, daily, recs] = await Promise.all([
+    api.get("/api/analytics/rollup?days=28").catch(() => null),
+    api.get("/api/analytics/top?days=28&limit=15").catch(() => null),
+    api.get("/api/analytics/daily?days=7").catch(() => null),
+    api.get("/api/analytics/recommendations").catch(() => null),
+  ]);
+  loading.remove();
+
+  if (!rollup || !rollup.configured) {
+    page.appendChild(h("div", { class: "alert alert-warn" },
+      "⚠ YouTube Analytics OAuth not connected. Run ",
+      h("code", { class: "mono" }, ".venv/bin/python scripts/yt_oauth.py"),
+      " to enable channel rollups + per-video retention.",
+    ));
+    return;
+  }
+
+  // Rollup tiles
+  const tiles = [
+    { label: "Views (28d)", value: fmt.int(rollup.views || 0), accent: false },
+    { label: "Est. Revenue", value: fmt.money(rollup.est_revenue || 0), accent: true },
+    { label: "Subs Gained", value: fmt.int(rollup.subs_gained || 0), accent: false },
+    { label: "Avg Watch %", value: `${(rollup.avg_watch_pct || 0).toFixed(1)}%`, accent: false },
+  ];
+  const tilesRow = h("div", { class: "an-tiles" });
+  for (const t of tiles) {
+    tilesRow.appendChild(h("div", { class: `an-tile ${t.accent ? "an-tile-accent" : ""}` },
+      h("div", { class: "an-tile-value" }, t.value),
+      h("div", { class: "an-tile-label" }, t.label),
+    ));
+  }
+  page.appendChild(tilesRow);
+
+  // Daily sparkline
+  if (daily && (daily.views || []).length > 0) {
+    page.appendChild(h("div", { class: "panel mt-16" },
+      h("div", { class: "row-between mb-8" },
+        h("strong", {}, "Last 7 days"),
+        h("span", { class: "muted mono", style: "font-size:11px;" },
+          `${fmt.int((daily.views || []).reduce((a, b) => a + b, 0))} views · ${fmt.money((daily.revenue || []).reduce((a, b) => a + b, 0))} est. rev`,
+        ),
+      ),
+      sparkline(daily.views || [], daily.revenue || [], daily.dates || []),
+    ));
+  }
+
+  // Recommendations
+  if (recs && recs.ready) {
+    const recPanel = h("div", { class: "panel mt-16" },
+      h("h3", { style: "margin: 0 0 12px;" }, "🎯 What's working"),
+    );
+    for (const r of (recs.recommendations || [])) {
+      recPanel.appendChild(h("div", { class: "alert alert-info mb-8" }, `→ ${r}`));
+    }
+    if (recs.format_breakdown && recs.format_breakdown.length > 0) {
+      recPanel.appendChild(h("div", { class: "mt-16" },
+        h("strong", { style: "font-size:13px;" }, "Format breakdown"),
+        h("table", { class: "an-table mt-8" },
+          h("thead", {}, h("tr", {},
+            h("th", {}, "Format"), h("th", {}, "Posts"), h("th", {}, "Total views"), h("th", {}, "Revenue"), h("th", {}, "Avg views/post"),
+          )),
+          h("tbody", {},
+            ...recs.format_breakdown.map((f) => h("tr", {},
+              h("td", {}, f.format || "—"),
+              h("td", { class: "mono" }, String(f.count)),
+              h("td", { class: "mono" }, fmt.int(f.total_views)),
+              h("td", { class: "mono" }, fmt.money(f.revenue)),
+              h("td", { class: "mono" }, fmt.int(f.avg_views)),
+            )),
+          ),
+        ),
+      ));
+    }
+    page.appendChild(recPanel);
+  } else if (recs && !recs.ready) {
+    page.appendChild(h("div", { class: "panel mt-16" },
+      h("strong", {}, "🎯 What's working"),
+      h("p", { class: "muted mt-8" }, recs.note || "Not enough posted videos yet."),
+    ));
+  }
+
+  // Top videos table
+  if (top && (top.videos || []).length > 0) {
+    page.appendChild(h("div", { class: "panel mt-16" },
+      h("h3", { style: "margin: 0 0 12px;" }, `Top ${top.videos.length} videos (28d)`),
+      h("table", { class: "an-table" },
+        h("thead", {}, h("tr", {},
+          h("th", {}, ""),  // health dot
+          h("th", {}, "Views"),
+          h("th", {}, "Avg watch %"),
+          h("th", {}, "Subs"),
+          h("th", {}, "Est. rev"),
+          h("th", {}, "Video"),
+        )),
+        h("tbody", {},
+          ...top.videos.map((v) => h("tr", {},
+            h("td", {}, h("span", { class: `health-dot health-${v.health}` })),
+            h("td", { class: "mono" }, fmt.int(v.views || 0)),
+            h("td", { class: "mono" }, `${(v.averagePercentageWatched || 0).toFixed(1)}%`),
+            h("td", { class: "mono" }, fmt.int(v.subscribersGained || 0)),
+            h("td", { class: "mono" }, fmt.money(v.estimatedRevenue || 0)),
+            h("td", {}, v.url
+              ? h("a", { href: v.url, target: "_blank" }, v.video || "watch ↗")
+              : h("span", { class: "mono muted" }, v.video || "—"),
+            ),
+          )),
+        ),
+      ),
+    ));
+  } else {
+    page.appendChild(h("div", { class: "panel mt-16" },
+      h("strong", {}, "Top videos"),
+      h("p", { class: "muted mt-8" }, "No videos with view data in the last 28 days."),
+    ));
+  }
+}
+
+// Sparkline = SVG polyline scaled to fit.
+function sparkline(views, revenue, dates) {
+  const W = 600, H = 80, PAD = 4;
+  if (views.length < 2) return h("div", { class: "muted" }, "Not enough data points.");
+  const max = Math.max(...views, 1);
+  const stepX = (W - 2 * PAD) / (views.length - 1);
+  const pts = views.map((v, i) => `${PAD + i * stepX},${H - PAD - (v / max) * (H - 2 * PAD)}`).join(" ");
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="an-spark">
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e100c3" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e100c3" stop-opacity="0"/>
+    </linearGradient></defs>
+    <polyline points="${pts}" fill="none" stroke="#e100c3" stroke-width="2"/>
+    <polygon points="${PAD},${H-PAD} ${pts} ${W-PAD},${H-PAD}" fill="url(#sg)"/>
+  </svg>`;
+  return h("div", { html: svg });
+}
+
+// Format helpers (extend the existing fmt object).
+fmt.int = (n) => Number(n || 0).toLocaleString();
+fmt.money = (n) => {
+  if (!n) return "$0";
+  if (n < 100) return `$${n.toFixed(2)}`;
+  return `$${Math.round(n).toLocaleString()}`;
+};
 
 // ── Publish modal — Postiz publishing from any rendered card ───────────
 async function openPublishModal(projectId, renderPath, suggestedTitle) {

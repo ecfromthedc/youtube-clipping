@@ -201,7 +201,7 @@ pub fn analyze_retention(curve: &[(f64, f64)]) -> Option<RetentionSignals> {
 
 /// Refresh a YouTube Analytics access token from .env creds (mirrors `_yt_creds` + the
 /// implicit googleapiclient refresh). None when creds are absent or refresh fails.
-fn yt_access_token(root: &Path) -> Option<String> {
+pub fn yt_access_token(root: &Path) -> Option<String> {
     let cid = config::env_var(root, "YT_CLIENT_ID")?;
     let secret = config::env_var(root, "YT_CLIENT_SECRET")?;
     let refresh = config::env_var(root, "YT_REFRESH_TOKEN")?;
@@ -222,7 +222,7 @@ fn yt_access_token(root: &Path) -> Option<String> {
     v.get("access_token").and_then(Value::as_str).map(String::from)
 }
 
-fn yt_report(
+pub fn yt_report(
     client: &reqwest::blocking::Client,
     token: &str,
     start: &str,
@@ -250,7 +250,7 @@ fn yt_report(
         .ok()
 }
 
-fn fetch_retention(
+pub fn fetch_retention(
     client: &reqwest::blocking::Client,
     token: &str,
     vid: &str,

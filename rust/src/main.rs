@@ -1,6 +1,7 @@
 //! `ycp` — YouTube clipping closed-loop ops (Rust port, in progress).
 //! The Python in ../src/ycp stays the live system until this reaches parity.
 mod archive;
+mod analytics;
 mod autopilot;
 mod brief;
 mod capture;

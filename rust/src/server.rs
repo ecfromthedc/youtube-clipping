@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::{captions, clip, commentary, config, distribute, listicle, srt, story, transcribe, voice};
+use crate::{analytics, captions, clip, commentary, config, distribute, listicle, srt, story, transcribe, voice};
 // Adapter::deliver is a trait method — bring it into scope for the publish path.
 use distribute::Adapter;
 
@@ -136,6 +136,11 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/voices", get(list_voices_route))
         .route("/api/postiz/integrations", get(list_postiz_integrations))
         .route("/api/postiz/publish", post(publish_to_postiz))
+        .route("/api/analytics/rollup", get(an_rollup))
+        .route("/api/analytics/top", get(an_top))
+        .route("/api/analytics/daily", get(an_daily))
+        .route("/api/analytics/retention/:vid", get(an_retention))
+        .route("/api/analytics/recommendations", get(an_recommendations))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
@@ -837,6 +842,9 @@ async fn publish_to_postiz(
     .await
     .map_err(|e| AppError(anyhow!("join: {e}")))??;
 
+    // Best-effort sidecar so analytics can join render → post → metrics later.
+    write_publish_sidecar(&abs, &result.0, &integration_id, &body.title);
+
     Ok(Json(json!({
         "ok": true,
         "post_id": result.0,
@@ -844,6 +852,79 @@ async fn publish_to_postiz(
         "title": body.title,
     })))
 }
+
+/// After publishing, write a `.publish.json` sidecar next to the rendered file so the
+/// analytics page can later join "what we rendered" → "what we posted" → "how it performed."
+/// Best-effort: never blocks the publish success on a sidecar write failing.
+#[allow(dead_code)]
+fn write_publish_sidecar(render_abs: &Path, post_id: &str, integration_id: &str, title: &str) {
+    let sidecar = render_abs.with_extension("publish.json");
+    let payload = json!({
+        "post_id": post_id,
+        "integration_id": integration_id,
+        "title": title,
+        "published_at": chrono::Utc::now().to_rfc3339(),
+    });
+    let _ = std::fs::write(&sidecar, serde_json::to_string_pretty(&payload).unwrap_or_default());
+}
+
+// ── Analytics: channel rollup + per-video + recommendations ───────────────────
+//
+// All hit YouTube Analytics via analytics.rs, which reuses the OAuth path from capture.rs
+// and caches results for 1h (tight quotas). Routes degrade gracefully when OAuth isn't
+// connected (return {configured: false}, never 500).
+
+async fn an_rollup(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<DaysParam>) -> Json<Value> {
+    let days = q.days.unwrap_or(28);
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || analytics::channel_rollup(&root, days).unwrap_or_else(|e| {
+        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
+    })).await.unwrap_or(json!({ "error": "join failed" }));
+    Json(v)
+}
+
+async fn an_top(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<TopParam>) -> Json<Value> {
+    let days = q.days.unwrap_or(28);
+    let limit = q.limit.unwrap_or(15);
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || analytics::top_videos(&root, days, limit).unwrap_or_else(|e| {
+        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
+    })).await.unwrap_or(json!({ "error": "join failed" }));
+    Json(v)
+}
+
+async fn an_daily(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<DaysParam>) -> Json<Value> {
+    let days = q.days.unwrap_or(7);
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || analytics::daily_series(&root, days).unwrap_or_else(|e| {
+        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
+    })).await.unwrap_or(json!({ "error": "join failed" }));
+    Json(v)
+}
+
+async fn an_retention(
+    State(s): State<AppState>,
+    AxumPath(vid): AxumPath<String>,
+) -> Json<Value> {
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || analytics::retention_curve(&root, &vid).unwrap_or_else(|e| {
+        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
+    })).await.unwrap_or(json!({ "error": "join failed" }));
+    Json(v)
+}
+
+async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || analytics::recommendations(&root).unwrap_or_else(|e| {
+        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
+    })).await.unwrap_or(json!({ "error": "join failed" }));
+    Json(v)
+}
+
+#[derive(Deserialize)]
+struct DaysParam { days: Option<u32> }
+#[derive(Deserialize)]
+struct TopParam { days: Option<u32>, limit: Option<usize> }
 
 /// Translate a `/api/projects/<id>/files/<rel>` URL into the absolute on-disk path.
 fn resolve_editor_path(root: &Path, url_path: &str) -> Result<PathBuf> {
