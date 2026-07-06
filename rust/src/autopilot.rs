@@ -35,13 +35,12 @@ pub fn angle_for(niche: Option<&str>) -> &'static str {
 }
 
 /// niche name (niches.yaml `name:`) → owned-channel slug (the Postiz routing key). Mirrors the
-/// explicit 5-entry CHANNEL_SLUGS map.
+/// explicit CHANNEL_SLUGS map.
 fn channel_slug(niche: Option<&str>) -> Option<&'static str> {
     match niche.unwrap_or("").to_lowercase().as_str() {
         "debate-agitation" => Some("hot-seat"),
         "finance-money" => Some("money-fights"),
         "comedy-crashout" => Some("crash-out"),
-        "health-mythbusting" => Some("phoenix-protocol"),
         "business-finance" => Some("boardroom"),
         _ => None,
     }
@@ -364,7 +363,7 @@ mod tests {
 
     #[test]
     fn channel_mapping_falls_back_to_clips() {
-        assert_eq!(channel_for(Some("health-mythbusting")), "phoenix-protocol");
+        assert_eq!(channel_for(Some("finance-money")), "money-fights");
         assert_eq!(channel_for(Some("unknown-niche")), "clips");
         assert_eq!(channel_for(None), "clips");
     }

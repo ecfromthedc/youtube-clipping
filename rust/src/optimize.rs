@@ -157,7 +157,7 @@ pub fn format_entry(a: &Analysis, weights: &BTreeMap<String, f64>, today: &str) 
     .join("\n")
 }
 
-const LOG_HEADER: &str = "# Improvement Log — Phoenix Protocol clip factory\n\n\
+const LOG_HEADER: &str = "# Improvement Log\n\n\
     _Auto-appended by the OPTIMIZE stage each cycle. Newest entries at the bottom._\n\
     _North star: 100M impressions / month. The loop doubles down on what wins._\n";
 

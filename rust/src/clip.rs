@@ -392,7 +392,7 @@ fn run_inner(
                 len: cand.duration(),
                 preview: cand.text.chars().take(80).collect(),
             });
-            // Archive to the Phoenix Protocol drive (best-effort; never blocks posting).
+            // Archive to durable storage (best-effort; never blocks posting).
             let meta = serde_json::json!({
                 "clip_id": variant_id,
                 "channel": opts.channel,

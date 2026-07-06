@@ -1,4 +1,4 @@
-// Tides & Ships Technology — editor frontend.
+// Tides Tiller — editor frontend.
 // Single-page router: dashboard → project → editor timeline. Talks to the Rust
 // pipeline over the small REST API in server.rs. No framework, no build step —
 // just modules and the platform. Runs as static files embedded in the binary.
@@ -83,10 +83,9 @@ function topbar(route) {
     h("a", { class: "brand", href: "#/" },
       h("span", { class: "brand-mark", html: BRAND_SVG }),
       h("span", { class: "brand-name" },
-        h("span", {}, "Tides"),
-        h("span", { class: "amp" }, "&"),
-        h("span", {}, "Ships"),
-        h("span", { class: "tech" }, "TECHNOLOGY"),
+      h("span", {}, "Tides"),
+      h("span", { class: "amp" }, "·"),
+      h("span", {}, "Tiller"),
       ),
     ),
     h("nav", { class: "topbar-nav" },
@@ -1198,7 +1197,7 @@ route();
         apiKey: "server-side",  // proxy injects DEEPSEEK_API_KEY
         language: "en-US",
       });
-      console.log("🤖 Tides & Ships Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
+      console.log("🤖 Tides Tiller Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
     } catch (err) {
       console.warn("Page Agent failed to init:", err);
     }

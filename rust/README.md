@@ -14,10 +14,10 @@ Python env per machine; compile-time safety kills cross-machine dependency drift
 ```
 cd rust && cargo build --release
 ./target/release/ycp status        # cross-checks against the Python output
-./target/release/ycp serve         # Tides & Ships editor → http://localhost:8787
+./target/release/ycp serve         # Tides Tiller editor → http://localhost:8787
 ```
 
-## Tides & Ships editor (`ycp serve`)
+## Tides Tiller editor (`ycp serve`)
 
 A browser UI over the clip pipeline — internal team tool, no auth/billing. Drop in
 raw footage → the pipeline transcribes it + ranks your best moments → pick one on

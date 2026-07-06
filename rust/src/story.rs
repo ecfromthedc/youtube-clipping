@@ -6,7 +6,7 @@
 //! VO, and emit a 9:16 vertical Short ready to post.
 //!
 //! This is the first format in the engine that GENERATES content from a script
-//! rather than clipping existing footage — it turns Tides & Ships from a clip
+//! rather than clipping existing footage — it turns Tides Tiller from a clip
 //! editor into a content factory (the playbook's actual shape).
 //!
 //! Pipeline:

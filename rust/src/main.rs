@@ -173,7 +173,7 @@ enum Cmd {
         #[arg(long)]
         no_hook: bool,
     },
-    /// Launch the Tides & Ships editor — a browser UI over the clip pipeline.
+    /// Launch the Tides Tiller editor — a browser UI over the clip pipeline.
     /// Internal team tool: upload footage → see ranked clip moments → render a
     /// captioned 9:16 MP4. No DB/auth/billing; projects live in data/editor/.
     Serve {

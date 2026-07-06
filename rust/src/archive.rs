@@ -1,4 +1,4 @@
-//! Archive every produced clip + its metadata to the 'Phoenix Protocol' drive.
+//! Archive every produced clip + its metadata to durable storage.
 //! Parity port of `src/ycp/archive.py`. Best-effort and decoupled: a failed archive NEVER
 //! breaks the pipeline (the clip still posts from local). Autopilot wires these up.
 //!
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn is_rclone_routing() {
         // Mirrors test_archive.py::test_is_rclone_routing.
-        assert!(is_rclone("phoenix:Phoenix Protocol/clips"));
+        assert!(is_rclone("drive:Channel/clips"));
         assert!(!is_rclone("/Users/x/Google Drive"));
         assert!(!is_rclone("~/Drive"));
         assert!(!is_rclone("")); // off → not a remote
@@ -148,14 +148,14 @@ mod tests {
             dest.to_string_lossy()
         ))
         .unwrap();
-        let meta = serde_json::json!({"clip_id": "c1", "channel": "phoenix-protocol", "hook": "h"});
+        let meta = serde_json::json!({"clip_id": "c1", "channel": "hot-seat", "hook": "h"});
         let out = archive_clip(&settings, &clip, &meta);
         assert!(out.is_some());
         assert_eq!(
-            std::fs::read(dest.join("phoenix-protocol").join("c1.mp4")).unwrap(),
+            std::fs::read(dest.join("hot-seat").join("c1.mp4")).unwrap(),
             b"video-bytes"
         );
-        assert!(dest.join("phoenix-protocol").join("c1.json").exists());
+        assert!(dest.join("hot-seat").join("c1.json").exists());
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

@@ -63,15 +63,6 @@ const QUESTS: &[(&str, &[&str])] = &[
             "ModernWisdom",
         ],
     ),
-    (
-        "4 · Myth-Busting (health/fitness)",
-        &[
-            "Dr Mike Israetel",
-            "Bryan Johnson",
-            "Jeff Nippard",
-            "Dr Gabrielle Lyon",
-        ],
-    ),
 ];
 
 /// Highest level reached → (1-based level number, current level, next level or None).
