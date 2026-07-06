@@ -68,11 +68,20 @@ const h = (tag, props = {}, ...children) => {
 };
 const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); };
 
-// ── Brand mark (SVG ship + wave) ───────────────────────────────────────
+// ── Brand mark (SVG tiller/wheel + wave) ───────────────────────────────
+// Claymorphic styling applied via .brand-mark.clay in styles.css.
+//
+// LOGO SWAP: when the real logo asset is ready, drop it at
+//   rust/web/logo.svg  (or .png — embed via rust-embed either way)
+// then replace the BRAND_SVG markup below with:
+//   <img src="/static/logo.svg" alt="Tides Tiller" />
+// The .clay container shape (puffy 3D, gloss dot, layered insets) wraps
+// whatever the inner element is, so the brand treatment is preserved.
 const BRAND_SVG = `<svg viewBox="0 0 64 64" fill="none">
-  <path d="M8 42c4 0 4-3 8-3s4 3 8 3 4-3 8-3 4 3 8 3 4-3 8-3 4 3 8 3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M32 14l9 13H23z" fill="currentColor"/>
-  <rect x="29" y="26" width="6" height="10" rx="1" fill="currentColor"/>
+  <circle cx="32" cy="28" r="14" fill="none" stroke="currentColor" stroke-width="3"/>
+  <circle cx="32" cy="28" r="3" fill="currentColor"/>
+  <path d="M32 14v28M18 28h28M22 18l20 20M42 18L22 38" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M6 50c4 0 4-3 8-3s4 3 8 3 4-3 8-3 4 3 8 3 4-3 8-3 4 3 8 3 4-3 8-3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.7"/>
 </svg>`;
 
 // ── Topbar ─────────────────────────────────────────────────────────────
@@ -81,7 +90,7 @@ function topbar(route) {
     h("a", { class: `nav-link ${route === href ? "active" : ""}`, href: `#${href}` }, label);
   return h("header", { class: "topbar" },
     h("a", { class: "brand", href: "#/" },
-      h("span", { class: "brand-mark", html: BRAND_SVG }),
+      h("span", { class: "brand-mark clay", html: BRAND_SVG }),
       h("span", { class: "brand-name" },
       h("span", {}, "Tides"),
       h("span", { class: "amp" }, "·"),
@@ -1183,24 +1192,23 @@ function renderCardActions(projectId, renderPath, title) {
 route();
 
 // ── Page Agent — in-page copilot ───────────────────────────────────────
-// Alibaba's page-agent: lets the team drive the editor by typing ("transcribe
-// this video and compile the top 5"). Uses our /api/llm/proxy route so the
-// DeepSeek key stays server-side.
-(function initPageAgent() {
+// Alibaba's page-agent (ESM, named export PageAgent). Loaded via esm.sh which
+// bundles the @page-agent/* deps. Lets the team drive the editor by typing
+// ("transcribe this video and compile the top 5"). Uses our /api/llm/proxy
+// route so the DeepSeek key stays server-side.
+import { PageAgent } from "https://esm.sh/page-agent@1.11.0";
+
+(async function initPageAgent() {
   if (typeof window === "undefined" || window.__tidesPageAgent) return;
-  function build() {
-    if (!window.PageAgent) return setTimeout(build, 200);
-    try {
-      window.__tidesPageAgent = new window.PageAgent({
-        model: "deepseek-chat",
-        baseURL: window.location.origin + "/api/llm/proxy",
-        apiKey: "server-side",  // proxy injects DEEPSEEK_API_KEY
-        language: "en-US",
-      });
-      console.log("🤖 Tides Tiller Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
-    } catch (err) {
-      console.warn("Page Agent failed to init:", err);
-    }
+  try {
+    window.__tidesPageAgent = new PageAgent({
+      model: "deepseek-chat",
+      baseURL: window.location.origin + "/api/llm/proxy",
+      apiKey: "server-side",  // proxy injects DEEPSEEK_API_KEY
+      language: "en-US",
+    });
+    console.log("🤖 Tides Tiller Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
+  } catch (err) {
+    console.warn("Page Agent failed to init:", err);
   }
-  build();
 })();

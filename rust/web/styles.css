@@ -146,9 +146,9 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
 }
 
 .brand-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: var(--brand-gradient);
   display: grid;
   place-items: center;
@@ -156,6 +156,50 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   font-weight: 900;
   font-size: 13px;
   box-shadow: 0 4px 14px rgba(225, 0, 195, 0.45), var(--razor-top), var(--razor-bottom);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.brand:hover .brand-mark { transform: translateY(-1px) scale(1.04); }
+
+/* Claymorphic variant — puffy 3D tactile shape.
+ * To swap in a real logo image, replace the inner SVG with
+ * <img src="/static/logo.svg" /> in app.js; the .clay container shape stays. */
+.brand-mark.clay {
+  --clay-light: rgba(255, 255, 255, 0.55);
+  --clay-dark: rgba(79, 0, 70, 0.55);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.45) 0%, transparent 42%),
+    linear-gradient(145deg, #ff4ce0 0%, #c400a8 45%, #6a00b0 100%);
+  border-radius: 14px;
+  box-shadow:
+    /* outer puffy drop shadow */
+    0 6px 14px rgba(133, 0, 215, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    /* top-left light rim — the "lit from above" clay highlight */
+    inset 2px 2px 4px var(--clay-light),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.7),
+    /* bottom-right dark rim — the clay depth */
+    inset -3px -3px 6px var(--clay-dark),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+.brand-mark.clay::after {
+  /* glossy specular dot — the wet-clay highlight in the top-left of the bead */
+  content: "";
+  position: absolute;
+  top: 18%;
+  left: 22%;
+  width: 28%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.7) 0%, transparent 70%);
+  pointer-events: none;
+}
+.brand-mark.clay svg {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5)) drop-shadow(0 0 2px rgba(255,255,255,0.3));
+  position: relative;
+  z-index: 1;
 }
 
 .brand-mark svg { width: 18px; height: 18px; }
