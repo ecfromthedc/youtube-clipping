@@ -10,6 +10,9 @@
 </head>
 <body>
   <div id="app"></div>
+  <!-- Page Agent (alibaba/page-agent) — in-page GUI agent. autoInit=false so we
+       control instantiation in app.js with our server-side LLM proxy. -->
+  <script src="https://registry.npmmirror.com/page-agent/1.11.0/files/dist/iife/page-agent.js?autoInit=false"></script>
   <script type="module" src="/static/app.js"></script>
 </body>
 </html>

@@ -141,6 +141,9 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/analytics/daily", get(an_daily))
         .route("/api/analytics/retention/:vid", get(an_retention))
         .route("/api/analytics/recommendations", get(an_recommendations))
+        // LLM proxy for Page Agent — injects the server-side DeepSeek key so the
+        // browser agent can drive the editor without the key landing in client JS.
+        .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
@@ -925,6 +928,69 @@ async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {
 struct DaysParam { days: Option<u32> }
 #[derive(Deserialize)]
 struct TopParam { days: Option<u32>, limit: Option<usize> }
+
+// ── LLM proxy — keeps the DeepSeek key server-side for Page Agent ─────────────
+//
+// Page Agent needs an OpenAI-compatible chat endpoint + API key. Rather than
+// bake DEEPSEEK_API_KEY into client JS (where anyone with DevTools could read
+// it), we proxy the request through the editor server which injects the key.
+
+const DEEPSEEK_BASE: &str = "https://api.deepseek.com/v1";
+const DEEPSEEK_MODEL: &str = "deepseek-chat";
+const PAGE_AGENT_SYSTEM: &str = "You are Tides & Ships Copilot, an in-page assistant inside an internal team video editor. You can click, type, and navigate the page on the user's behalf. Available actions: navigate (Projects / Studio / Analytics / Pipeline topbar links); on Projects click '+ New project' to upload a video, then 'Transcribe & find clips'; on the project page use '🏆 Ranking compilation' sidebar section to compile the top 5 moments (click Compile ranking video); on Studio pick a format (Ranking / Storytelling / Commentary) and fill the form fields then click Render Short; on any rendered card click the 📤 button to publish to a Postiz YouTube channel; on Analytics view channel rollups and top posts. Be terse — say what you're doing in one line, then do it. If the user asks for something not on the page, say so.";
+
+async fn llm_proxy_chat(
+    State(s): State<AppState>,
+    body: axum::body::Body,
+) -> Result<Response, AppError> {
+    let bytes = axum::body::to_bytes(body, usize::MAX).await
+        .map_err(|e| AppError(anyhow!("read body: {e}")))?;
+    let mut req: Value = serde_json::from_slice(&bytes)
+        .map_err(|e| AppError(anyhow!("parse json: {e}")))?;
+
+    // Force our system prompt to the front so the agent always knows the editor shape.
+    if let Some(msgs) = req.get_mut("messages").and_then(Value::as_array_mut) {
+        let sys = json!({ "role": "system", "content": PAGE_AGENT_SYSTEM });
+        msgs.insert(0, sys);
+    }
+    // Pin the model to DeepSeek (the key the team holds) unless the caller set one.
+    if req.get("model").is_none() {
+        req["model"] = json!(DEEPSEEK_MODEL);
+    }
+    // Strip any caller-provided apiKey hint — we use the server-side key.
+    if let Some(obj) = req.as_object_mut() {
+        obj.remove("apiKey");
+    }
+
+    let key = config::env_var(&s.root, "DEEPSEEK_API_KEY")
+        .ok_or_else(|| AppError(anyhow!("DEEPSEEK_API_KEY not set in .env")))?;
+    let stream = req.get("stream").and_then(Value::as_bool).unwrap_or(false);
+
+    let root = s.root.clone();
+    let req_for_task = req.clone();
+    let resp = tokio::task::spawn_blocking(move || -> Result<Value> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(if stream { 300 } else { 120 }))
+            .build()?;
+        let r = client
+            .post(format!("{DEEPSEEK_BASE}/chat/completions"))
+            .header("Authorization", format!("Bearer {key}"))
+            .header("Content-Type", "application/json")
+            .json(&req_for_task)
+            .send()?;
+        if !r.status().is_success() {
+            let status = r.status();
+            let body = r.text().unwrap_or_default();
+            let tail = &body[body.len().saturating_sub(500)..];
+            bail!("DeepSeek HTTP {status}: {}", tail.trim());
+        }
+        Ok(r.json::<Value>()?)
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))??;
+
+    Ok(Json(resp).into_response())
+}
 
 /// Translate a `/api/projects/<id>/files/<rel>` URL into the absolute on-disk path.
 fn resolve_editor_path(root: &Path, url_path: &str) -> Result<PathBuf> {

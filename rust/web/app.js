@@ -1182,3 +1182,26 @@ function renderCardActions(projectId, renderPath, title) {
 
 // ── Boot ───────────────────────────────────────────────────────────────
 route();
+
+// ── Page Agent — in-page copilot ───────────────────────────────────────
+// Alibaba's page-agent: lets the team drive the editor by typing ("transcribe
+// this video and compile the top 5"). Uses our /api/llm/proxy route so the
+// DeepSeek key stays server-side.
+(function initPageAgent() {
+  if (typeof window === "undefined" || window.__tidesPageAgent) return;
+  function build() {
+    if (!window.PageAgent) return setTimeout(build, 200);
+    try {
+      window.__tidesPageAgent = new window.PageAgent({
+        model: "deepseek-chat",
+        baseURL: window.location.origin + "/api/llm/proxy",
+        apiKey: "server-side",  // proxy injects DEEPSEEK_API_KEY
+        language: "en-US",
+      });
+      console.log("🤖 Tides & Ships Copilot ready. Press Ctrl+/ (or Cmd+/) to chat.");
+    } catch (err) {
+      console.warn("Page Agent failed to init:", err);
+    }
+  }
+  build();
+})();
