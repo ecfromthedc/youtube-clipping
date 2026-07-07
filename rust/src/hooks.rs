@@ -26,8 +26,24 @@ const CURIOSITY: &[&str] = &[
     "before", "until", "happens",
 ];
 const STAKES: &[&str] = &[
-    "never", "stop", "mistake", "wrong", "worst", "lost", "ruined", "destroyed", "exposed",
-    "caught", "regret", "warning", "fired", "broke", "scam", "lie", "lying", "trap",
+    "never",
+    "stop",
+    "mistake",
+    "wrong",
+    "worst",
+    "lost",
+    "ruined",
+    "destroyed",
+    "exposed",
+    "caught",
+    "regret",
+    "warning",
+    "fired",
+    "broke",
+    "scam",
+    "lie",
+    "lying",
+    "trap",
 ];
 const PERSONAL: &[&str] = &["you", "your", "you're", "youre"];
 const FINANCE_TERMS: &[&str] = &["money", "broke", "rich", "debt", "cash", "$"];
@@ -141,7 +157,11 @@ fn coerce_candidate(raw: &Value) -> Option<Candidate> {
     match raw {
         Value::String(s) => {
             let text = s.trim().to_string();
-            (!text.is_empty()).then(|| Candidate { text, typ: String::new(), fit: 0.5 })
+            (!text.is_empty()).then(|| Candidate {
+                text,
+                typ: String::new(),
+                fit: 0.5,
+            })
         }
         Value::Object(map) => {
             let text = map.get("text").map(py_str).unwrap_or_default();
@@ -172,7 +192,12 @@ fn combined_score(c: &Candidate, angle: &str, prefer_types: &[String]) -> f64 {
 
 fn trim_words(text: &str, max_words: usize) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
-    let joined = words.iter().take(max_words).copied().collect::<Vec<_>>().join(" ");
+    let joined = words
+        .iter()
+        .take(max_words)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
     if words.len() > max_words {
         format!("{joined}…")
     } else {
@@ -189,7 +214,12 @@ fn final_type(typ: &str) -> String {
 }
 
 /// Pick the highest combined-score candidate (FIRST on ties, matching Python `max`). Pure.
-fn select_best(candidates: &[Candidate], angle: &str, max_words: usize, prefer_types: &[String]) -> Option<Hook> {
+fn select_best(
+    candidates: &[Candidate],
+    angle: &str,
+    max_words: usize,
+    prefer_types: &[String],
+) -> Option<Hook> {
     let first = candidates.first()?;
     let mut best_c = first;
     let mut best_s = combined_score(first, angle, prefer_types);
@@ -208,7 +238,14 @@ fn select_best(candidates: &[Candidate], angle: &str, max_words: usize, prefer_t
 }
 
 /// Best hook per distinct type, top-k by score (stable: ties keep model order). Pure.
-fn select_variants(cands: &[Candidate], angle: &str, k: usize, max_words: usize, prefer_types: &[String], moment: &str) -> Vec<Hook> {
+fn select_variants(
+    cands: &[Candidate],
+    angle: &str,
+    k: usize,
+    max_words: usize,
+    prefer_types: &[String],
+    moment: &str,
+) -> Vec<Hook> {
     if cands.is_empty() {
         let fb = pick_title(moment, max_words);
         return vec![Hook {
@@ -216,8 +253,10 @@ fn select_variants(cands: &[Candidate], angle: &str, k: usize, max_words: usize,
             typ: "heuristic".to_string(),
         }];
     }
-    let mut indexed: Vec<(&Candidate, f64)> =
-        cands.iter().map(|c| (c, combined_score(c, angle, prefer_types))).collect();
+    let mut indexed: Vec<(&Candidate, f64)> = cands
+        .iter()
+        .map(|c| (c, combined_score(c, angle, prefer_types)))
+        .collect();
     // Descending score; sort_by is stable so equal scores keep model order (Python sorted reverse).
     indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     let mut seen: HashSet<String> = HashSet::new();
@@ -251,7 +290,13 @@ fn resolve_model(root: &Path) -> String {
 }
 
 /// POST to DeepSeek and return the raw `hooks` array. Errors bubble up; caller maps to [].
-fn call_deepseek(key: &str, model: &str, system: &str, prompt: &str, timeout: u64) -> Result<Vec<Value>> {
+fn call_deepseek(
+    key: &str,
+    model: &str,
+    system: &str,
+    prompt: &str,
+    timeout: u64,
+) -> Result<Vec<Value>> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout))
         .build()?;
@@ -285,12 +330,22 @@ fn call_deepseek(key: &str, model: &str, system: &str, prompt: &str, timeout: u6
 
 /// Ask DeepSeek for N hook candidates with type + self-rated fit. [] on any failure (no key,
 /// network error, bad JSON) so the caller falls back to the heuristic. Mirrors `generate_candidates`.
-pub fn generate_candidates(root: &Path, moment: &str, n: usize, angle: &str, model: Option<&str>, timeout: u64, prefer_types: &[String]) -> Vec<Candidate> {
+pub fn generate_candidates(
+    root: &Path,
+    moment: &str,
+    n: usize,
+    angle: &str,
+    model: Option<&str>,
+    timeout: u64,
+    prefer_types: &[String],
+) -> Vec<Candidate> {
     let key = match config::env_var(root, "DEEPSEEK_API_KEY") {
         Some(k) => k,
         None => return vec![],
     };
-    let model = model.map(str::to_string).unwrap_or_else(|| resolve_model(root));
+    let model = model
+        .map(str::to_string)
+        .unwrap_or_else(|| resolve_model(root));
     let angle_line = if angle.is_empty() {
         String::new()
     } else {
@@ -316,29 +371,57 @@ pub fn generate_candidates(root: &Path, moment: &str, n: usize, angle: &str, mod
 
 /// The hook agent's answer as {text, type} — the winning candidate, else the heuristic.
 /// Always usable + safe. Mirrors `best`.
-pub fn best(root: &Path, moment: &str, angle: &str, n: usize, max_words: usize, model: Option<&str>, prefer_types: &[String]) -> Hook {
-    let candidates: Vec<Candidate> = generate_candidates(root, moment, n, angle, model, 30, prefer_types)
-        .into_iter()
-        .filter(|c| looks_safe(&c.text))
-        .collect();
+pub fn best(
+    root: &Path,
+    moment: &str,
+    angle: &str,
+    n: usize,
+    max_words: usize,
+    model: Option<&str>,
+    prefer_types: &[String],
+) -> Hook {
+    let candidates: Vec<Candidate> =
+        generate_candidates(root, moment, n, angle, model, 30, prefer_types)
+            .into_iter()
+            .filter(|c| looks_safe(&c.text))
+            .collect();
     if let Some(h) = select_best(&candidates, angle, max_words, prefer_types) {
         return h;
     }
     let fallback = pick_title(moment, max_words);
     Hook {
-        text: if looks_safe(&fallback) { fallback } else { String::new() },
+        text: if looks_safe(&fallback) {
+            fallback
+        } else {
+            String::new()
+        },
         typ: "heuristic".to_string(),
     }
 }
 
 /// Up to K hook variants in DIFFERENT styles for A/B testing a hero clip. Degrades to the
 /// heuristic when the model can't produce diverse angles. Mirrors `variants`.
-pub fn variants(root: &Path, moment: &str, angle: &str, k: usize, max_words: usize, model: Option<&str>, prefer_types: &[String]) -> Vec<Hook> {
-    let cands: Vec<Candidate> =
-        generate_candidates(root, moment, std::cmp::max(k * 2, 6), angle, model, 30, prefer_types)
-            .into_iter()
-            .filter(|c| looks_safe(&c.text))
-            .collect();
+pub fn variants(
+    root: &Path,
+    moment: &str,
+    angle: &str,
+    k: usize,
+    max_words: usize,
+    model: Option<&str>,
+    prefer_types: &[String],
+) -> Vec<Hook> {
+    let cands: Vec<Candidate> = generate_candidates(
+        root,
+        moment,
+        std::cmp::max(k * 2, 6),
+        angle,
+        model,
+        30,
+        prefer_types,
+    )
+    .into_iter()
+    .filter(|c| looks_safe(&c.text))
+    .collect();
     select_variants(&cands, angle, k, max_words, prefer_types, moment)
 }
 
@@ -347,7 +430,11 @@ mod tests {
     use super::*;
 
     fn cand(text: &str, typ: &str, fit: f64) -> Candidate {
-        Candidate { text: text.to_string(), typ: typ.to_string(), fit }
+        Candidate {
+            text: text.to_string(),
+            typ: typ.to_string(),
+            fit,
+        }
     }
 
     // ── score_hook (mirrors test_hooks.py) ──────────────────────────────────
@@ -414,7 +501,11 @@ mod tests {
 
     #[test]
     fn best_returns_text_and_type() {
-        let cands = vec![cand("the cardio pace that adds years:", "Curiosity Gap", 0.9)];
+        let cands = vec![cand(
+            "the cardio pace that adds years:",
+            "Curiosity Gap",
+            0.9,
+        )];
         let h = select_best(&cands, "", 10, &[]).unwrap();
         assert_eq!(h.text, "the cardio pace that adds years:");
         assert_eq!(h.typ, "Curiosity Gap");
@@ -446,7 +537,14 @@ mod tests {
 
     #[test]
     fn variants_degrades_to_heuristic() {
-        let v = select_variants(&[], "", 3, 10, &[], "Why does nobody talk about this? It matters.");
+        let v = select_variants(
+            &[],
+            "",
+            3,
+            10,
+            &[],
+            "Why does nobody talk about this? It matters.",
+        );
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].typ, "heuristic");
         assert!(!v[0].text.is_empty());
@@ -455,7 +553,12 @@ mod tests {
     // ── coerce (mirrors test_coerce_accepts_string_and_dict) ─────────────────
     #[test]
     fn coerce_accepts_string_and_dict() {
-        assert_eq!(coerce_candidate(&Value::String("Hook text".into())).unwrap().text, "Hook text");
+        assert_eq!(
+            coerce_candidate(&Value::String("Hook text".into()))
+                .unwrap()
+                .text,
+            "Hook text"
+        );
         let d = serde_json::json!({"text": "X", "type": "Reframe", "fit": "0.8"});
         assert_eq!(coerce_candidate(&d).unwrap().fit, 0.8);
         assert!(coerce_candidate(&serde_json::json!({"text": ""})).is_none());

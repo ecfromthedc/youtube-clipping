@@ -52,7 +52,10 @@ pub struct CompileOpts {
 
 impl Default for CompileOpts {
     fn default() -> Self {
-        CompileOpts { title: String::new(), order: Order::CountUp }
+        CompileOpts {
+            title: String::new(),
+            order: Order::CountUp,
+        }
     }
 }
 
@@ -76,7 +79,14 @@ pub fn compile(
     std::fs::create_dir_all(&workdir)?;
 
     let body = compile_inner(
-        root, source_video, segments, items, opts, &settings, &workdir, out_path,
+        root,
+        source_video,
+        segments,
+        items,
+        opts,
+        &settings,
+        &workdir,
+        out_path,
     );
     let _ = std::fs::remove_dir_all(&workdir);
     body
@@ -96,8 +106,8 @@ fn compile_inner(
     // Determine playback order. We always cut every item; order only affects the concat
     // sequence + which clip carries the hook title.
     let playback: Vec<usize> = match opts.order {
-        Order::CountDown => (0..items.len()).collect(),                 // 1, 2, 3 ... N
-        Order::CountUp => (0..items.len()).rev().collect(),             // N, N-1 ... 1
+        Order::CountDown => (0..items.len()).collect(), // 1, 2, 3 ... N
+        Order::CountUp => (0..items.len()).rev().collect(), // N, N-1 ... 1
     };
 
     let mut badged: Vec<PathBuf> = Vec::with_capacity(items.len());
@@ -113,7 +123,12 @@ fn compile_inner(
         let badge_frames = workdir.join(format!("badge_{i}"));
         let dur = ffprobe_duration(&cut).max(0.5);
         captions::render_rank_overlay(
-            item.rank, dur, &badge_frames, captions::SIZE, captions::FPS, None,
+            item.rank,
+            dur,
+            &badge_frames,
+            captions::SIZE,
+            captions::FPS,
+            None,
         )?;
         let badged_clip = workdir.join(format!("badged_{i}.mp4"));
         overlay_png_sequence(&cut, &badge_frames, &badged_clip, captions::FPS)?;
@@ -172,7 +187,14 @@ fn overlay_png_sequence(base: &Path, frames_dir: &Path, out: &Path, fps: u32) ->
         .args([
             "-filter_complex",
             "[0:v][1:v]overlay=0:0:format=auto:eof_action=pass",
-            "-c:v", "libx264", "-c:a", "copy", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "copy",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
         ])
         .arg(&tmp)
         .output()?;
@@ -182,7 +204,9 @@ fn overlay_png_sequence(base: &Path, frames_dir: &Path, out: &Path, fps: u32) ->
         bail!("rank-badge overlay failed: {}", tail.trim());
     }
     std::fs::rename(&tmp, out).or_else(|_| {
-        std::fs::copy(&tmp, out).map(|_| ()).and_then(|_| std::fs::remove_file(&tmp))
+        std::fs::copy(&tmp, out)
+            .map(|_| ())
+            .and_then(|_| std::fs::remove_file(&tmp))
     })?;
     Ok(())
 }
@@ -201,7 +225,10 @@ fn concat_clips(clips: &[&Path], out: &Path) -> Result<()> {
         // ffmpeg concat demuxer: file paths are relative to the list, or absolute.
         // Use absolute to sidestep cwd ambiguity.
         let abs = std::fs::canonicalize(c).unwrap_or_else(|_| c.to_path_buf());
-        list.push_str(&format!("file '{}'\n", abs.display().to_string().replace('\'', "'\\''")));
+        list.push_str(&format!(
+            "file '{}'\n",
+            abs.display().to_string().replace('\'', "'\\''")
+        ));
     }
     std::fs::write(&list_path, &list)?;
 
@@ -215,11 +242,16 @@ fn concat_clips(clips: &[&Path], out: &Path) -> Result<()> {
     if !res.status.success() || !out.exists() {
         let err = String::from_utf8_lossy(&res.stderr);
         // concat demuxer is finicky on codec mismatch; fall back to re-encode if copy failed.
-        eprintln!("  · concat -c copy failed ({}); re-encoding", err.trim().chars().take(120).collect::<String>());
+        eprintln!(
+            "  · concat -c copy failed ({}); re-encoding",
+            err.trim().chars().take(120).collect::<String>()
+        );
         let res = Command::new("ffmpeg")
             .args(["-y", "-f", "concat", "-safe", "0", "-i"])
             .arg(&list_path)
-            .args(["-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p"])
+            .args([
+                "-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            ])
             .arg(out)
             .output()?;
         if !res.status.success() || !out.exists() {
@@ -234,11 +266,21 @@ fn concat_clips(clips: &[&Path], out: &Path) -> Result<()> {
 /// ffprobe → duration seconds; 0.0 if unreadable. (Local copy so this module is standalone.)
 fn ffprobe_duration(path: &Path) -> f64 {
     match Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(path)
         .output()
     {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0.0),
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(0.0),
         Err(_) => 0.0,
     }
 }
@@ -249,10 +291,25 @@ mod tests {
 
     #[test]
     fn countdown_keeps_input_order() {
-        let items = vec![
-            RankItem { start: 0.0, end: 5.0, rank: 1, label: "a".into() },
-            RankItem { start: 5.0, end: 10.0, rank: 2, label: "b".into() },
-            RankItem { start: 10.0, end: 15.0, rank: 3, label: "c".into() },
+        let items = [
+            RankItem {
+                start: 0.0,
+                end: 5.0,
+                rank: 1,
+                label: "a".into(),
+            },
+            RankItem {
+                start: 5.0,
+                end: 10.0,
+                rank: 2,
+                label: "b".into(),
+            },
+            RankItem {
+                start: 10.0,
+                end: 15.0,
+                rank: 3,
+                label: "c".into(),
+            },
         ];
         // CountDown plays 1, 2, 3 — index order 0, 1, 2.
         let playback: Vec<usize> = match Order::CountDown {

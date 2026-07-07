@@ -18,11 +18,27 @@ pub fn vstack_cmd(clip: &Path, gameplay: &Path, out: &Path) -> Vec<String> {
          [top][bot]vstack=inputs=2[v]"
     );
     vec![
-        "-y".into(), "-i".into(), clip.display().to_string(),
-        "-stream_loop".into(), "-1".into(), "-i".into(), gameplay.display().to_string(),
-        "-filter_complex".into(), fc, "-map".into(), "[v]".into(), "-map".into(), "0:a?".into(),
-        "-c:v".into(), "libx264".into(), "-c:a".into(), "aac".into(),
-        "-preset".into(), "veryfast".into(), "-shortest".into(), out.display().to_string(),
+        "-y".into(),
+        "-i".into(),
+        clip.display().to_string(),
+        "-stream_loop".into(),
+        "-1".into(),
+        "-i".into(),
+        gameplay.display().to_string(),
+        "-filter_complex".into(),
+        fc,
+        "-map".into(),
+        "[v]".into(),
+        "-map".into(),
+        "0:a?".into(),
+        "-c:v".into(),
+        "libx264".into(),
+        "-c:a".into(),
+        "aac".into(),
+        "-preset".into(),
+        "veryfast".into(),
+        "-shortest".into(),
+        out.display().to_string(),
     ]
 }
 
@@ -31,10 +47,15 @@ pub fn stack_gameplay(clip: &Path, gameplay: &Path, out: &Path) -> Result<PathBu
     if !gameplay.exists() {
         bail!("gameplay loop not found: {}", gameplay.display());
     }
-    let res = Command::new("ffmpeg").args(vstack_cmd(clip, gameplay, out)).output()?;
+    let res = Command::new("ffmpeg")
+        .args(vstack_cmd(clip, gameplay, out))
+        .output()?;
     if !res.status.success() {
         let err = String::from_utf8_lossy(&res.stderr);
-        bail!("gameplay vstack failed: {}", err[err.len().saturating_sub(400)..].trim());
+        bail!(
+            "gameplay vstack failed: {}",
+            err[err.len().saturating_sub(400)..].trim()
+        );
     }
     Ok(out.to_path_buf())
 }
@@ -56,17 +77,26 @@ pub fn pick_title(transcript: &str, max_words: usize) -> String {
     }
     // First question wins; else max(by char-length). Python `max` returns the FIRST max on
     // ties, so keep only strictly-longer to match.
-    let pick = sentences.iter().find(|s| s.ends_with('?')).copied().unwrap_or_else(|| {
-        let mut best = sentences[0];
-        for &s in &sentences[1..] {
-            if s.chars().count() > best.chars().count() {
-                best = s;
+    let pick = sentences
+        .iter()
+        .find(|s| s.ends_with('?'))
+        .copied()
+        .unwrap_or_else(|| {
+            let mut best = sentences[0];
+            for &s in &sentences[1..] {
+                if s.chars().count() > best.chars().count() {
+                    best = s;
+                }
             }
-        }
-        best
-    });
+            best
+        });
     let words: Vec<&str> = pick.split_whitespace().collect();
-    let joined = words.iter().take(max_words).copied().collect::<Vec<_>>().join(" ");
+    let joined = words
+        .iter()
+        .take(max_words)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
     if words.len() > max_words {
         format!("{joined}…")
     } else {

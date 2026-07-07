@@ -36,7 +36,11 @@ fn base_url(_root: &Path) -> String {
 fn api_key(root: &Path) -> Option<String> {
     // settings.yaml omni_voice.api_key takes precedence; then .env; then OMNIVOICE_API_KEY.
     if let Ok(s) = config::load_settings(root) {
-        if let Some(k) = s.get("omni_voice").and_then(|v| v.get("api_key")).and_then(|v| v.as_str()) {
+        if let Some(k) = s
+            .get("omni_voice")
+            .and_then(|v| v.get("api_key"))
+            .and_then(|v| v.as_str())
+        {
             if !k.is_empty() {
                 return Some(k.to_string());
             }
@@ -55,7 +59,11 @@ pub fn available(root: &Path) -> bool {
         Ok(c) => c,
         Err(_) => return false,
     };
-    client.get(&url).send().map(|r| r.status().is_success()).unwrap_or(false)
+    client
+        .get(&url)
+        .send()
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
 #[derive(Serialize)]
@@ -155,7 +163,10 @@ pub fn list_voices(root: &Path) -> Vec<(String, String)> {
         .map(|arr| {
             arr.iter()
                 .filter_map(|x| {
-                    let id = x["voice_id"].as_str().or_else(|| x["id"].as_str())?.to_string();
+                    let id = x["voice_id"]
+                        .as_str()
+                        .or_else(|| x["id"].as_str())?
+                        .to_string();
                     let name = x["name"].as_str().unwrap_or(&id).to_string();
                     Some((id, name))
                 })
@@ -215,7 +226,10 @@ mod tests {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|x| {
-                        let id = x["voice_id"].as_str().or_else(|| x["id"].as_str())?.to_string();
+                        let id = x["voice_id"]
+                            .as_str()
+                            .or_else(|| x["id"].as_str())?
+                            .to_string();
                         let name = x["name"].as_str().unwrap_or(&id).to_string();
                         Some((id, name))
                     })

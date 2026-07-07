@@ -119,18 +119,22 @@ impl StageResult {
 }
 
 /// Run one stage, capture ok/detail, never raise out of the chain. Logs its line on completion.
-fn stage(
-    name: &'static str,
-    results: &mut Vec<StageResult>,
-    fn_: impl FnOnce() -> Result<String>,
-) {
+fn stage(name: &'static str, results: &mut Vec<StageResult>, fn_: impl FnOnce() -> Result<String>) {
     let res = match fn_() {
-        Ok(detail) => StageResult { name, ok: true, detail },
+        Ok(detail) => StageResult {
+            name,
+            ok: true,
+            detail,
+        },
         Err(e) => {
             // Python logs `{ExcType}: {msg[:160]}`; anyhow has no exc-type, so the message
             // (truncated) stands in. Only seen on a stage failure (✗) — not on the happy path.
             let msg: String = format!("{e}").chars().take(160).collect();
-            StageResult { name, ok: false, detail: msg }
+            StageResult {
+                name,
+                ok: false,
+                detail: msg,
+            }
         }
     };
     println!("{}", res.line());
@@ -148,7 +152,13 @@ pub struct RunOpts<'a> {
 
 impl Default for RunOpts<'_> {
     fn default() -> Self {
-        RunOpts { max_videos: 5, skip_source: false, do_clip: true, hook_cta: true, lanes: DEFAULT_LANES }
+        RunOpts {
+            max_videos: 5,
+            skip_source: false,
+            do_clip: true,
+            hook_cta: true,
+            lanes: DEFAULT_LANES,
+        }
     }
 }
 
@@ -182,12 +192,21 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
     let mut queue: Vec<sourcing::SourceRow> = Vec::new();
     stage("source", &mut results, || {
         if opts.skip_source {
-            queue = db::source_queue(conn, None)?.into_iter().map(db_row_to_source).collect();
+            queue = db::source_queue(conn, None)?
+                .into_iter()
+                .map(db_row_to_source)
+                .collect();
             Ok(format!("reused {} queued (skip-source)", queue.len()))
         } else {
             queue = sourcing::run(root, None)?;
-            std::fs::write(root.join("data").join("source-queue.md"), sourcing::render_queue_md(&queue))?;
-            Ok(format!("{} videos queued → data/source-queue.md", queue.len()))
+            std::fs::write(
+                root.join("data").join("source-queue.md"),
+                sourcing::render_queue_md(&queue),
+            )?;
+            Ok(format!(
+                "{} videos queued → data/source-queue.md",
+                queue.len()
+            ))
         }
     });
 
@@ -201,7 +220,9 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
         let conn_chans = connected_channels(&settings);
         let pool: Vec<sourcing::SourceRow> = queue
             .iter()
-            .filter(|r| conn_chans.is_empty() || conn_chans.contains(&channel_for(r.niche.as_deref())))
+            .filter(|r| {
+                conn_chans.is_empty() || conn_chans.contains(&channel_for(r.niche.as_deref()))
+            })
             .cloned()
             .collect();
         let todo = select_unclipped(&pool, &clipped, opts.max_videos, opts.lanes);
@@ -209,7 +230,10 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
             return Ok(if conn_chans.is_empty() {
                 "0 new sources to clip (all caught up)".to_string()
             } else {
-                format!("0 to clip for connected channels: {}", join_sorted(&conn_chans))
+                format!(
+                    "0 to clip for connected channels: {}",
+                    join_sorted(&conn_chans)
+                )
             });
         }
         let mut made = 0usize;
@@ -234,7 +258,10 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
             )?;
             made += created.len();
         }
-        Ok(format!("{made} clips from {} sources (pending_qc)", todo.len()))
+        Ok(format!(
+            "{made} clips from {} sources (pending_qc)",
+            todo.len()
+        ))
     });
 
     // 3 ─ QC ──────────────────────────────────────────────────────────────────
@@ -244,12 +271,13 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
             return Ok("no clips pending QC".to_string());
         }
         match qc::dispatch_pending(conn, root)? {
-            qc::Dispatch::Human { channel, dispatched } => {
-                Ok(format!("{dispatched} dispatched for review via {channel}"))
-            }
-            qc::Dispatch::Auto { approved, rejected } => {
-                Ok(format!("auto-QC: {approved} approved, {rejected} rejected (guardrails)"))
-            }
+            qc::Dispatch::Human {
+                channel,
+                dispatched,
+            } => Ok(format!("{dispatched} dispatched for review via {channel}")),
+            qc::Dispatch::Auto { approved, rejected } => Ok(format!(
+                "auto-QC: {approved} approved, {rejected} rejected (guardrails)"
+            )),
         }
     });
 
@@ -257,7 +285,9 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
     stage("capture", &mut results, || {
         let pub_n = capture::capture_public(conn, root)?;
         let full = capture::capture_full_analytics(conn, root)?;
-        Ok(format!("{pub_n} public-view + {full} owned-analytics snapshots"))
+        Ok(format!(
+            "{pub_n} public-view + {full} owned-analytics snapshots"
+        ))
     });
 
     // 5 ─ BRIEF ────────────────────────────────────────────────────────────────
@@ -294,8 +324,11 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
         let min_views = settings["ab"]["min_views"].as_i64().unwrap_or(1000);
         let clips = db::clips_with_latest_metrics(conn)?;
         let ab = experiment::resolve(root, &clips, min_views)?;
-        let ab_note =
-            if ab.is_empty() { String::new() } else { format!(" · {} A/B winner(s) crowned", ab.len()) };
+        let ab_note = if ab.is_empty() {
+            String::new()
+        } else {
+            format!(" · {} A/B winner(s) crowned", ab.len())
+        };
         Ok(format!(
             "learned from {} clips → +{} boosted / -{} starved{ab_note} (→ IMPROVEMENT-LOG.md)",
             r.clips,
@@ -308,9 +341,14 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
     stage("distribute", &mut results, || {
         let r = distribute::run(conn, root)?;
         if !r.enabled {
-            return Ok(format!("OFF — {} approved clips waiting; {}", r.waiting, r.note));
+            return Ok(format!(
+                "OFF — {} approved clips waiting; {}",
+                r.waiting, r.note
+            ));
         }
-        let prov = settings["distribution"]["provider"].as_str().unwrap_or("postiz");
+        let prov = settings["distribution"]["provider"]
+            .as_str()
+            .unwrap_or("postiz");
         Ok(format!(
             "delivered {} via {prov} ({} parked [channel not connected], {} blocked, {} failed)",
             r.delivered, r.parked, r.blocked, r.failed
@@ -319,7 +357,10 @@ pub fn run(conn: &Connection, root: &std::path::Path, opts: &RunOpts) -> Result<
 
     // 8 ─ CLEANUP ──────────────────────────────────────────────────────────────
     stage("cleanup", &mut results, || {
-        Ok(format!("{} local files pruned (posted → live + archived)", archive::prune_local(conn, root)?))
+        Ok(format!(
+            "{} local files pruned (posted → live + archived)",
+            archive::prune_local(conn, root)?
+        ))
     });
 
     let ok = results.iter().filter(|r| r.ok).count();
@@ -372,9 +413,9 @@ mod tests {
     fn select_skips_clipped_wrong_lane_and_empty_url() {
         let queue = vec![
             row("a", "owned", "u1", None),
-            row("b", "rented", "u2", None),  // wrong lane
-            row("c", "owned", "", None),     // no url
-            row("d", "owned", "u4", None),   // already clipped
+            row("b", "rented", "u2", None), // wrong lane
+            row("c", "owned", "", None),    // no url
+            row("d", "owned", "u4", None),  // already clipped
             row("e", "owned", "u5", None),
         ];
         let clipped: HashSet<String> = ["d".to_string()].into_iter().collect();
@@ -385,8 +426,9 @@ mod tests {
 
     #[test]
     fn select_respects_max_videos() {
-        let queue: Vec<sourcing::SourceRow> =
-            (0..10).map(|i| row(&format!("v{i}"), "owned", &format!("u{i}"), None)).collect();
+        let queue: Vec<sourcing::SourceRow> = (0..10)
+            .map(|i| row(&format!("v{i}"), "owned", &format!("u{i}"), None))
+            .collect();
         let picked = select_unclipped(&queue, &HashSet::new(), 3, DEFAULT_LANES);
         assert_eq!(picked.len(), 3);
     }

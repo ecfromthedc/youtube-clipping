@@ -30,7 +30,10 @@ fn qc_cfg(settings: &serde_yaml::Value) -> &serde_yaml::Value {
 /// Which human channel to use; `auto` picks by whatever creds are configured. Mirrors
 /// `resolve_channel` (slack > telegram > local).
 pub fn resolve_channel(root: &Path, settings: &serde_yaml::Value) -> String {
-    let name = qc_cfg(settings)["channel"].as_str().unwrap_or("auto").to_lowercase();
+    let name = qc_cfg(settings)["channel"]
+        .as_str()
+        .unwrap_or("auto")
+        .to_lowercase();
     if name != "auto" {
         return name;
     }
@@ -54,7 +57,10 @@ pub fn dispatch_pending(conn: &Connection, root: &Path) -> Result<Dispatch> {
     }
     let name = resolve_channel(root, &settings);
     let dispatched = dispatch_human(conn, root, &name)?;
-    Ok(Dispatch::Human { channel: name, dispatched })
+    Ok(Dispatch::Human {
+        channel: name,
+        dispatched,
+    })
 }
 
 fn dispatch_human(conn: &Connection, root: &Path, channel: &str) -> Result<i64> {
@@ -75,7 +81,10 @@ fn dispatch_local(conn: &Connection, root: &Path) -> Result<i64> {
     let mut lines = vec!["# QC review — pending clips".to_string(), String::new()];
     for c in &clips {
         let creator = c.source_creator.as_deref().unwrap_or("?");
-        let len = c.length_sec.map(|n| n.to_string()).unwrap_or_else(|| "?".to_string());
+        let len = c
+            .length_sec
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "?".to_string());
         let file = c.post_url.as_deref().unwrap_or("");
         lines.push(format!(
             "- **{id}** · {creator} · {len}s\n  - file: `{file}`\n  - approve: `ycp qc-approve {id}`  ·  reject: `ycp qc-reject {id}`",

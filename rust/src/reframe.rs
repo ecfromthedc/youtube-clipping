@@ -25,8 +25,14 @@ pub const TARGET_H: i64 = 1920;
 fn probe_dims(video: &Path) -> (i64, i64) {
     let out = Command::new("ffprobe")
         .args([
-            "-v", "error", "-select_streams", "v:0", "-show_entries",
-            "stream=width,height", "-of", "csv=p=0:s=x",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0:s=x",
         ])
         .arg(video)
         .output();
@@ -35,7 +41,10 @@ fn probe_dims(video: &Path) -> (i64, i64) {
         Err(_) => return (0, 0),
     };
     let mut it = stdout.split('x');
-    match (it.next().and_then(|s| s.trim().parse().ok()), it.next().and_then(|s| s.trim().parse().ok())) {
+    match (
+        it.next().and_then(|s| s.trim().parse().ok()),
+        it.next().and_then(|s| s.trim().parse().ok()),
+    ) {
         (Some(w), Some(h)) => (w, h),
         _ => (0, 0),
     }
@@ -69,7 +78,9 @@ pub fn crop_x_expr(track: &[(f64, f64)], scaled_w: i64, crop_w: i64, jump: f64) 
     let hi = (scaled_w - crop_w).max(0);
     let to_x = |frac: f64| -> i64 {
         // Python: int(max(0, min(hi, frac*scaled_w - crop_w/2))) — clamp then truncate (>=0).
-        let v = (frac * scaled_w as f64 - crop_w as f64 / 2.0).min(hi as f64).max(0.0);
+        let v = (frac * scaled_w as f64 - crop_w as f64 / 2.0)
+            .min(hi as f64)
+            .max(0.0);
         v as i64
     };
     let sm = smooth(&track.iter().map(|(_, f)| *f).collect::<Vec<_>>(), 5);
@@ -96,12 +107,21 @@ pub fn crop_x_expr(track: &[(f64, f64)], scaled_w: i64, crop_w: i64, jump: f64) 
 
 /// Scale to target height and crop a 9:16 window — face-following or static center.
 /// Mirrors `reframe`. Raises on ffmpeg failure.
-pub fn reframe(video: &Path, out_path: &Path, workdir: &Path, mode: &str, size: (i64, i64)) -> Result<std::path::PathBuf> {
+pub fn reframe(
+    video: &Path,
+    out_path: &Path,
+    workdir: &Path,
+    mode: &str,
+    size: (i64, i64),
+) -> Result<std::path::PathBuf> {
     let (w, h) = size;
     let (sw, sh) = probe_dims(video);
     // round(sw * h / sh / 2) * 2 if sh else 0
-    let scaled_w =
-        if sh != 0 { (round_to(sw as f64 * h as f64 / sh as f64 / 2.0, 0) * 2.0) as i64 } else { 0 };
+    let scaled_w = if sh != 0 {
+        (round_to(sw as f64 * h as f64 / sh as f64 / 2.0, 0) * 2.0) as i64
+    } else {
+        0
+    };
     let mut expr: Option<String> = None;
     if mode == "face" && scaled_w > w {
         let (track, sampled) = face_track(video);
@@ -110,10 +130,9 @@ pub fn reframe(video: &Path, out_path: &Path, workdir: &Path, mode: &str, size: 
         }
     }
     let center_vf = format!("scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}");
-    let face_vf = if scaled_w <= w || expr.is_none() {
-        None
-    } else {
-        Some(format!("scale=-2:{h},crop={w}:{h}:x='{}':y=0", expr.unwrap()))
+    let face_vf = match expr {
+        Some(e) if scaled_w > w => Some(format!("scale=-2:{h},crop={w}:{h}:x='{e}':y=0")),
+        _ => None,
     };
 
     let tmp = workdir.join("reframed.mp4");
@@ -126,7 +145,10 @@ pub fn reframe(video: &Path, out_path: &Path, workdir: &Path, mode: &str, size: 
         let out = Command::new("ffmpeg")
             .args(["-y", "-i"])
             .arg(video)
-            .args(["-vf", &vf, "-c:v", "libx264", "-c:a", "copy", "-preset", "veryfast", "-pix_fmt", "yuv420p"])
+            .args([
+                "-vf", &vf, "-c:v", "libx264", "-c:a", "copy", "-preset", "veryfast", "-pix_fmt",
+                "yuv420p",
+            ])
             .arg(&tmp)
             .output()?;
         if out.status.success() && tmp.exists() {
@@ -134,7 +156,9 @@ pub fn reframe(video: &Path, out_path: &Path, workdir: &Path, mode: &str, size: 
                 std::fs::create_dir_all(d).ok();
             }
             std::fs::rename(&tmp, out_path).or_else(|_| {
-                std::fs::copy(&tmp, out_path).map(|_| ()).and_then(|_| std::fs::remove_file(&tmp))
+                std::fs::copy(&tmp, out_path)
+                    .map(|_| ())
+                    .and_then(|_| std::fs::remove_file(&tmp))
             })?;
             return Ok(out_path.to_path_buf());
         }
@@ -158,15 +182,24 @@ mod tests {
     fn static_track_centers_and_clamps() {
         let track: Vec<(f64, f64)> = (0..40).map(|i| (i as f64 * 0.3, 0.5)).collect();
         let expected = (0.5 * 3413.0 - 540.0) as i64; // int(0.5*3413 - 1080/2)
-        assert_eq!(crop_x_expr(&track, 3413, 1080, 0.05), Some(expected.to_string()));
+        assert_eq!(
+            crop_x_expr(&track, 3413, 1080, 0.05),
+            Some(expected.to_string())
+        );
     }
 
     #[test]
     fn track_clamps_to_frame_edges() {
         let left: Vec<(f64, f64)> = (0..40).map(|i| (i as f64 * 0.3, 0.0)).collect();
         let right: Vec<(f64, f64)> = (0..40).map(|i| (i as f64 * 0.3, 1.0)).collect();
-        assert_eq!(crop_x_expr(&left, 3413, TARGET_W, 0.05), Some("0".to_string()));
-        assert_eq!(crop_x_expr(&right, 3413, TARGET_W, 0.05), Some((3413 - 1080).to_string()));
+        assert_eq!(
+            crop_x_expr(&left, 3413, TARGET_W, 0.05),
+            Some("0".to_string())
+        );
+        assert_eq!(
+            crop_x_expr(&right, 3413, TARGET_W, 0.05),
+            Some((3413 - 1080).to_string())
+        );
     }
 
     #[test]

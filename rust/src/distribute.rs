@@ -48,7 +48,13 @@ pub fn auto_qc(conn: &Connection) -> Result<(i64, i64)> {
     let (mut approved, mut rejected) = (0, 0);
     for clip in db::pending_qc_clips(conn)? {
         let (decision, reason) = qc_decision(&clip);
-        db::record_qc(conn, &clip.clip_id, &decision, Some("auto-qc"), Some(&reason))?;
+        db::record_qc(
+            conn,
+            &clip.clip_id,
+            &decision,
+            Some("auto-qc"),
+            Some(&reason),
+        )?;
         if decision == "approve" {
             approved += 1;
         } else {
@@ -65,7 +71,10 @@ pub fn hashtags_for(settings: &Yaml, channel: Option<&str>) -> Vec<String> {
     let tags = &settings["distribution"]["hashtags"];
     let pick = |key: &str| -> Option<Vec<String>> {
         let seq = tags.get(key)?.as_sequence()?;
-        let v: Vec<String> = seq.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+        let v: Vec<String> = seq
+            .iter()
+            .filter_map(|x| x.as_str().map(String::from))
+            .collect();
         if v.is_empty() {
             None
         } else {
@@ -86,18 +95,27 @@ pub fn title_for(clip: &ClipRow) -> String {
     }
     let creator = clip.source_creator.as_deref().unwrap_or("");
     // Python: f"{creator} — clip".strip(" —")
-    format!("{creator} — clip").trim_matches(|c| c == ' ' || c == '—').to_string()
+    format!("{creator} — clip")
+        .trim_matches(|c| c == ' ' || c == '—')
+        .to_string()
 }
 
 /// Post description: the hook + the channel's hashtags (for discovery).
 pub fn caption_for(settings: &Yaml, clip: &ClipRow) -> String {
     let tags = hashtags_for(settings, clip.channel.as_deref()).join(" ");
-    format!("{}\n\n{}", title_for(clip), tags).trim().to_string()
+    format!("{}\n\n{}", title_for(clip), tags)
+        .trim()
+        .to_string()
 }
 
 /// The next `n` posting slots (ISO strings) drawn from `times` (HH:MM, channel-local), at/after
 /// `start`, rolling to following days. Pure. Mirrors `assign_slots`.
-pub fn assign_slots(n: usize, times: &[String], tz: &str, start: DateTime<FixedOffset>) -> Vec<String> {
+pub fn assign_slots(
+    n: usize,
+    times: &[String],
+    tz: &str,
+    start: DateTime<FixedOffset>,
+) -> Vec<String> {
     if n == 0 {
         return vec![];
     }
@@ -112,8 +130,14 @@ pub fn assign_slots(n: usize, times: &[String], tz: &str, start: DateTime<FixedO
     while out.len() < n {
         for hhmm in &ordered {
             let mut parts = hhmm.split(':');
-            let hh: u32 = parts.next().and_then(|x| x.trim().parse().ok()).unwrap_or(0);
-            let mm: u32 = parts.next().and_then(|x| x.trim().parse().ok()).unwrap_or(0);
+            let hh: u32 = parts
+                .next()
+                .and_then(|x| x.trim().parse().ok())
+                .unwrap_or(0);
+            let mm: u32 = parts
+                .next()
+                .and_then(|x| x.trim().parse().ok())
+                .unwrap_or(0);
             let cand = match combine_local(zone, day, hh, mm) {
                 Some(c) => c,
                 None => continue,
@@ -136,14 +160,21 @@ pub fn assign_slots(n: usize, times: &[String], tz: &str, start: DateTime<FixedO
 ///   • fall-back ambiguity → the FIRST (earlier) occurrence;
 ///   • spring-forward gap (a nonexistent wall time) → keep the wall time with the PRE-transition
 ///     offset (PEP 495 fold=0), which is the literal string Python emits.
-fn combine_local(zone: Tz, day: chrono::NaiveDate, hh: u32, mm: u32) -> Option<DateTime<FixedOffset>> {
+fn combine_local(
+    zone: Tz,
+    day: chrono::NaiveDate,
+    hh: u32,
+    mm: u32,
+) -> Option<DateTime<FixedOffset>> {
     let naive = day.and_hms_opt(hh, mm, 0)?;
     match zone.from_local_datetime(&naive) {
         chrono::LocalResult::Single(dt) => Some(dt.fixed_offset()),
         chrono::LocalResult::Ambiguous(earlier, _later) => Some(earlier.fixed_offset()),
         chrono::LocalResult::None => {
             // In the gap: borrow the offset from safely before the (≤1h) transition.
-            let before = zone.from_local_datetime(&(naive - chrono::Duration::hours(2))).earliest()?;
+            let before = zone
+                .from_local_datetime(&(naive - chrono::Duration::hours(2)))
+                .earliest()?;
             let off = *before.fixed_offset().offset();
             naive.and_local_timezone(off).single()
         }
@@ -176,7 +207,10 @@ pub fn post_id(out: &Value) -> String {
     };
     if let Some(map) = obj.as_object() {
         // Python: out.get("postId") or out.get("id") or "posted" — falsy values fall through.
-        let pick = map.get("postId").filter(|v| truthy(v)).or_else(|| map.get("id").filter(|v| truthy(v)));
+        let pick = map
+            .get("postId")
+            .filter(|v| truthy(v))
+            .or_else(|| map.get("id").filter(|v| truthy(v)));
         return match pick {
             Some(v) => val_str(v),
             None => "posted".to_string(),
@@ -203,7 +237,10 @@ impl Adapter for OutboxAdapter {
             std::fs::copy(clip_path, &dest)?;
         }
         let stem = clip_path.file_stem().unwrap_or_default().to_string_lossy();
-        std::fs::write(self.outbox.join(format!("{stem}.json")), serde_json::to_string_pretty(meta)?)?;
+        std::fs::write(
+            self.outbox.join(format!("{stem}.json")),
+            serde_json::to_string_pretty(meta)?,
+        )?;
         Ok(dest.to_string_lossy().to_string())
     }
 }
@@ -219,7 +256,12 @@ pub struct PostizAdapter {
 impl PostizAdapter {
     /// Direct constructor (used by the editor's per-publish path: it picks the
     /// integration id at the call site rather than from settings.yaml).
-    pub fn new(token: String, api_url: String, channels: std::collections::HashMap<String, String>, schedule: String) -> Self {
+    pub fn new(
+        token: String,
+        api_url: String,
+        channels: std::collections::HashMap<String, String>,
+        schedule: String,
+    ) -> Self {
         Self {
             token,
             api_url: api_url.trim_end_matches('/').to_string(),
@@ -229,7 +271,10 @@ impl PostizAdapter {
     }
 
     pub fn from_config(pz: &Yaml) -> Result<Self> {
-        let token_env = pz.get("token_env").and_then(|v| v.as_str()).unwrap_or("POSTIZ_API_TOKEN");
+        let token_env = pz
+            .get("token_env")
+            .and_then(|v| v.as_str())
+            .unwrap_or("POSTIZ_API_TOKEN");
         // Mirrors Python: reads os.environ only (not the .env loader).
         let token = std::env::var(token_env).unwrap_or_default();
         if token.is_empty() {
@@ -240,7 +285,12 @@ impl PostizAdapter {
             .and_then(|v| v.as_mapping())
             .map(|m| {
                 m.iter()
-                    .filter_map(|(k, v)| Some((k.as_str()?.to_string(), v.as_str().unwrap_or("").to_string())))
+                    .filter_map(|(k, v)| {
+                        Some((
+                            k.as_str()?.to_string(),
+                            v.as_str().unwrap_or("").to_string(),
+                        ))
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -253,7 +303,11 @@ impl PostizAdapter {
                 .trim_end_matches('/')
                 .to_string(),
             channels,
-            schedule: pz.get("schedule").and_then(|v| v.as_str()).unwrap_or("now").to_string(),
+            schedule: pz
+                .get("schedule")
+                .and_then(|v| v.as_str())
+                .unwrap_or("now")
+                .to_string(),
         })
     }
 }
@@ -268,10 +322,18 @@ impl Adapter for PostizAdapter {
                 meta.channel
             )
         })?;
-        let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(180)).build()?;
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(180))
+            .build()?;
         let bytes = std::fs::read(clip_path)?;
         let part = reqwest::blocking::multipart::Part::bytes(bytes)
-            .file_name(clip_path.file_name().unwrap_or_default().to_string_lossy().to_string())
+            .file_name(
+                clip_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+            )
             .mime_str("video/mp4")?;
         let form = reqwest::blocking::multipart::Form::new().part("file", part);
         let media: Value = client
@@ -316,7 +378,10 @@ impl Adapter for PostizAdapter {
 }
 
 fn resolve_outbox(cfg: &Yaml, root: &Path) -> PathBuf {
-    let p = cfg.get("outbox").and_then(|v| v.as_str()).unwrap_or("data/outbox");
+    let p = cfg
+        .get("outbox")
+        .and_then(|v| v.as_str())
+        .unwrap_or("data/outbox");
     let pb = PathBuf::from(p);
     if pb.is_absolute() {
         pb
@@ -337,7 +402,9 @@ pub fn build_adapter(cfg: &Yaml, root: &Path) -> Result<Box<dyn Adapter>> {
         return Ok(Box::new(PostizAdapter::from_config(&cfg["postiz"])?));
     }
     if provider.starts_with("repurpose") || provider.contains("outbox") {
-        return Ok(Box::new(OutboxAdapter { outbox: resolve_outbox(cfg, root) }));
+        return Ok(Box::new(OutboxAdapter {
+            outbox: resolve_outbox(cfg, root),
+        }));
     }
     bail!("unknown distribution provider {provider:?} (use 'postiz' or 'repurpose').")
 }
@@ -359,7 +426,11 @@ pub struct RunResult {
 pub fn run(conn: &Connection, root: &Path) -> Result<RunResult> {
     let settings = config::load_settings(root)?;
     let cfg = &settings["distribution"];
-    if !cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if !cfg
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         let n = db::approved_clips(conn)?.len() as i64;
         return Ok(RunResult {
             enabled: false,
@@ -372,7 +443,11 @@ pub fn run(conn: &Connection, root: &Path) -> Result<RunResult> {
         });
     }
     let adapter = build_adapter(cfg, root)?;
-    let provider = cfg.get("provider").and_then(|v| v.as_str()).unwrap_or("postiz").to_string();
+    let provider = cfg
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("postiz")
+        .to_string();
     let pz = &cfg["postiz"];
 
     // Postiz: only channels with a mapped integration id can post; others are PARKED.
@@ -401,7 +476,11 @@ pub fn run(conn: &Connection, root: &Path) -> Result<RunResult> {
     let mut parked = 0i64;
     for clip in db::approved_clips(conn)? {
         let blocked_by_map = match &mapped {
-            Some(set) => !clip.channel.as_deref().map(|c| set.contains(c)).unwrap_or(false),
+            Some(set) => !clip
+                .channel
+                .as_deref()
+                .map(|c| set.contains(c))
+                .unwrap_or(false),
             None => false,
         };
         if blocked_by_map {
@@ -413,14 +492,25 @@ pub fn run(conn: &Connection, root: &Path) -> Result<RunResult> {
 
     // Schedule mode → assign each postable clip to the next free posting slot.
     let mut slots: Vec<String> = Vec::new();
-    if provider.starts_with("postiz") && pz.get("schedule").and_then(|v| v.as_str()) == Some("schedule") {
+    if provider.starts_with("postiz")
+        && pz.get("schedule").and_then(|v| v.as_str()) == Some("schedule")
+    {
         let tz = pz.get("timezone").and_then(|v| v.as_str()).unwrap_or("UTC");
         let times: Vec<String> = pz
             .get("posting_times")
             .and_then(|v| v.as_sequence())
-            .map(|s| s.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|s| {
+                s.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        slots = assign_slots(postable.len(), &times, tz, chrono::Utc::now().fixed_offset());
+        slots = assign_slots(
+            postable.len(),
+            &times,
+            tz,
+            chrono::Utc::now().fixed_offset(),
+        );
     }
 
     let (mut delivered, mut blocked, mut failed) = (0i64, 0i64, 0i64);
@@ -469,7 +559,14 @@ pub fn run(conn: &Connection, root: &Path) -> Result<RunResult> {
             }
         }
     }
-    Ok(RunResult { enabled: true, delivered, blocked, parked, failed, ..Default::default() })
+    Ok(RunResult {
+        enabled: true,
+        delivered,
+        blocked,
+        parked,
+        failed,
+        ..Default::default()
+    })
 }
 
 // ── small helpers mirroring Python truthiness ─────────────────────────────────
@@ -509,7 +606,12 @@ mod tests {
     use super::*;
     use chrono::Timelike;
 
-    fn clip(fmt: &str, post_title: Option<&str>, creator: Option<&str>, channel: Option<&str>) -> ClipRow {
+    fn clip(
+        fmt: &str,
+        post_title: Option<&str>,
+        creator: Option<&str>,
+        channel: Option<&str>,
+    ) -> ClipRow {
         ClipRow {
             fmt: Some(fmt.to_string()),
             post_title: post_title.map(String::from),
@@ -543,7 +645,10 @@ mod tests {
 
     #[test]
     fn caption_falls_back_to_creator() {
-        let cap = caption_for(&settings(), &clip("auto-clip", None, Some("Codie Sanchez"), None));
+        let cap = caption_for(
+            &settings(),
+            &clip("auto-clip", None, Some("Codie Sanchez"), None),
+        );
         assert!(cap.starts_with("Codie Sanchez — clip"));
         assert!(cap.contains("#shorts")); // default hashtags when no channel
     }
@@ -552,7 +657,12 @@ mod tests {
     fn caption_includes_channel_hashtags() {
         let cap = caption_for(
             &settings(),
-            &clip("auto-clip", Some("they make 400k and still fight:"), None, Some("money-fights")),
+            &clip(
+                "auto-clip",
+                Some("they make 400k and still fight:"),
+                None,
+                Some("money-fights"),
+            ),
         );
         assert!(cap.starts_with("they make 400k and still fight:"));
         assert!(cap.contains("#money") && cap.contains("#investing"));
@@ -564,8 +674,10 @@ mod tests {
         let times = ["06:00", "12:30", "19:00"].map(String::from);
         let slots = assign_slots(4, &times, "America/New_York", start);
         assert_eq!(slots.len(), 4);
-        let parsed: Vec<DateTime<FixedOffset>> =
-            slots.iter().map(|s| DateTime::parse_from_rfc3339(s).unwrap()).collect();
+        let parsed: Vec<DateTime<FixedOffset>> = slots
+            .iter()
+            .map(|s| DateTime::parse_from_rfc3339(s).unwrap())
+            .collect();
         let mut sorted = parsed.clone();
         sorted.sort();
         assert_eq!(parsed, sorted); // strictly chronological
@@ -586,13 +698,21 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let src = tmp.join("clip.mp4");
         std::fs::write(&src, b"fake mp4").unwrap();
-        let adapter = OutboxAdapter { outbox: tmp.join("outbox") };
-        let meta = DeliverMeta { clip_id: Some("abc".into()), caption: "Hook here".into(), ..Default::default() };
+        let adapter = OutboxAdapter {
+            outbox: tmp.join("outbox"),
+        };
+        let meta = DeliverMeta {
+            clip_id: Some("abc".into()),
+            caption: "Hook here".into(),
+            ..Default::default()
+        };
         let dest = adapter.deliver(&src, &meta).unwrap();
         assert!(Path::new(&dest).exists());
         let sidecar = tmp.join("outbox").join("clip.json");
         assert!(sidecar.exists());
-        assert!(std::fs::read_to_string(&sidecar).unwrap().contains("Hook here"));
+        assert!(std::fs::read_to_string(&sidecar)
+            .unwrap()
+            .contains("Hook here"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -607,7 +727,11 @@ mod tests {
         };
         let tmp = std::env::temp_dir().join("ycp_postiz_nochan.mp4");
         std::fs::write(&tmp, b"x").unwrap();
-        let meta = DeliverMeta { channel: Some("nope".into()), caption: "h".into(), ..Default::default() };
+        let meta = DeliverMeta {
+            channel: Some("nope".into()),
+            caption: "h".into(),
+            ..Default::default()
+        };
         let err = adapter.deliver(&tmp, &meta).unwrap_err();
         assert!(err.to_string().contains("integration id"));
         let _ = std::fs::remove_file(&tmp);
@@ -634,7 +758,8 @@ mod tests {
         // postiz → PostizAdapter (unique token env name avoids clobbering real POSTIZ_API_TOKEN).
         std::env::set_var("YCP_TEST_BUILD_TOK", "tok");
         let cfg: Yaml =
-            serde_yaml::from_str("provider: postiz\npostiz:\n  token_env: YCP_TEST_BUILD_TOK\n").unwrap();
+            serde_yaml::from_str("provider: postiz\npostiz:\n  token_env: YCP_TEST_BUILD_TOK\n")
+                .unwrap();
         assert!(build_adapter(&cfg, Path::new("/")).is_ok());
         std::env::remove_var("YCP_TEST_BUILD_TOK");
     }
@@ -664,7 +789,9 @@ mod tests {
         let (approved, rejected) = auto_qc(&conn).unwrap();
         assert_eq!((approved, rejected), (1, 1));
         let status: String = conn
-            .query_row("SELECT status FROM clips WHERE clip_id='ok'", [], |r| r.get(0))
+            .query_row("SELECT status FROM clips WHERE clip_id='ok'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(status, "approved");
     }

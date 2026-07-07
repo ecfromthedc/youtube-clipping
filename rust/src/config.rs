@@ -16,7 +16,10 @@ pub fn find_root() -> Result<PathBuf> {
             return Ok(dir.to_path_buf());
         }
     }
-    bail!("could not find config/settings.yaml above {}", cwd.display())
+    bail!(
+        "could not find config/settings.yaml above {}",
+        cwd.display()
+    )
 }
 
 pub fn db_path(root: &Path) -> PathBuf {

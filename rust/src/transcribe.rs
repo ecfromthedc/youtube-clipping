@@ -54,13 +54,19 @@ fn which(name: &str) -> bool {
 /// Locate a whisper.cpp binary: explicit config/env, then known names. Mirrors `find_cpp_binary`.
 pub fn find_cpp_binary(root: &Path) -> Option<String> {
     let c = cfg(root);
-    let explicit = std::env::var("WHISPER_CPP_BIN").ok().filter(|s| !s.is_empty()).or_else(|| cfg_str(&c, "binary"));
+    let explicit = std::env::var("WHISPER_CPP_BIN")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| cfg_str(&c, "binary"));
     if let Some(b) = explicit {
         if which(&b) {
             return Some(b);
         }
     }
-    CPP_BINARIES.iter().find(|n| which(n)).map(|s| s.to_string())
+    CPP_BINARIES
+        .iter()
+        .find(|n| which(n))
+        .map(|s| s.to_string())
 }
 
 /// Resolve the GGML model path (env > settings > default), absolute. Mirrors `model_path`.
@@ -72,15 +78,32 @@ pub fn model_path(root: &Path) -> PathBuf {
         .or_else(|| cfg_str(&c, "model"))
         .unwrap_or_else(|| "models/ggml-base.en.bin".to_string());
     let path = PathBuf::from(p);
-    if path.is_absolute() { path } else { root.join(path) }
+    if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    }
 }
 
 /// Pure whisper.cpp command builder (unit-tested). Mirrors `whisper_cpp_cmd`.
-pub fn whisper_cpp_cmd(binary: &str, model: &Path, wav: &Path, out_stem: &Path, language: &str) -> Vec<String> {
+pub fn whisper_cpp_cmd(
+    binary: &str,
+    model: &Path,
+    wav: &Path,
+    out_stem: &Path,
+    language: &str,
+) -> Vec<String> {
     vec![
-        binary.to_string(), "-m".into(), model.display().to_string(),
-        "-f".into(), wav.display().to_string(), "-l".into(), language.to_string(),
-        "--output-srt".into(), "--output-file".into(), out_stem.display().to_string(),
+        binary.to_string(),
+        "-m".into(),
+        model.display().to_string(),
+        "-f".into(),
+        wav.display().to_string(),
+        "-l".into(),
+        language.to_string(),
+        "--output-srt".into(),
+        "--output-file".into(),
+        out_stem.display().to_string(),
     ]
 }
 
@@ -129,7 +152,10 @@ fn run_openai(root: &Path, video: &Path, workdir: &Path) -> Result<Vec<Segment>>
         .arg(workdir)
         .args(["--language", "en", "--verbose", "False"])
         .output()?;
-    let stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or("source");
+    let stem = video
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("source");
     let srt = workdir.join(format!("{stem}.srt"));
     if !out.status.success() || !srt.exists() {
         let err = String::from_utf8_lossy(&out.stderr);
@@ -155,7 +181,12 @@ pub fn transcribe(root: &Path, video: &Path, workdir: &Path) -> Result<Vec<Segme
 /// Last `n` chars of a stderr blob (mirrors Python `[-300:]` trailing-context slices).
 fn tail(s: &str, n: usize) -> String {
     let s = s.trim();
-    let start = s.char_indices().rev().nth(n.saturating_sub(1)).map(|(i, _)| i).unwrap_or(0);
+    let start = s
+        .char_indices()
+        .rev()
+        .nth(n.saturating_sub(1))
+        .map(|(i, _)| i)
+        .unwrap_or(0);
     s[start..].to_string()
 }
 
@@ -186,7 +217,12 @@ mod tests {
         std::env::remove_var("WHISPER_CPP_MODEL");
         let p = model_path(Path::new("/some/root"));
         assert!(p.is_absolute());
-        assert!(p.file_name().unwrap().to_str().unwrap().starts_with("ggml-"));
+        assert!(p
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("ggml-"));
     }
 
     #[test]

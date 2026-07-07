@@ -1,11 +1,11 @@
 //! `ycp` — YouTube clipping closed-loop ops (Rust port, in progress).
 //! The Python in ../src/ycp stays the live system until this reaches parity.
-mod archive;
 mod analytics;
+mod archive;
 mod autopilot;
 mod brief;
-mod capture;
 mod captions;
+mod capture;
 mod clip;
 mod commentary;
 mod config;
@@ -116,10 +116,7 @@ enum Cmd {
         top: Option<usize>,
     },
     /// Hook heuristic score for one text+duration (cross-checks clip.score_candidate). Pure.
-    ScoreCand {
-        text: String,
-        duration: f64,
-    },
+    ScoreCand { text: String, duration: f64 },
     /// Parse + rank a yt-dlp `--print` meta dump (cross-checks sourcing.parse_entries+rank). Pure.
     SrcRank {
         /// File of tab-delimited yt-dlp meta lines (id\tviews\tts\tchannel\ttitle).
@@ -281,7 +278,12 @@ fn main() -> Result<()> {
                 println!("{:.3}|{:.3}|{}", ch.start, ch.end, ch.text());
             }
         }
-        Cmd::Slots { n, tz, start, times } => {
+        Cmd::Slots {
+            n,
+            tz,
+            start,
+            times,
+        } => {
             let start = chrono::DateTime::parse_from_rfc3339(&start)?;
             let times: Vec<String> = times.split(',').map(|s| s.trim().to_string()).collect();
             for slot in distribute::assign_slots(n, &times, &tz, start) {
@@ -304,18 +306,36 @@ fn main() -> Result<()> {
                 None => println!("none"),
             }
         }
-        Cmd::Plan { srt, min_len, max_len, top } => {
+        Cmd::Plan {
+            srt,
+            min_len,
+            max_len,
+            top,
+        } => {
             let text = std::fs::read_to_string(&srt)?;
             let segs = srt::parse_srt(&text);
             // Pipe-delimited (start|end|duration|score|text) for byte-diffing against clip.plan_clips.
             for c in clip::plan_clips(&segs, min_len, max_len, top) {
-                println!("{:.3}|{:.3}|{:.2}|{:.3}|{}", c.start, c.end, c.duration(), c.score, c.text);
+                println!(
+                    "{:.3}|{:.3}|{:.2}|{:.3}|{}",
+                    c.start,
+                    c.end,
+                    c.duration(),
+                    c.score,
+                    c.text
+                );
             }
         }
         Cmd::ScoreCand { text, duration } => {
             println!("{:.3}", clip::score_candidate(&text, duration));
         }
-        Cmd::SrcRank { meta_file, creator, lane, now_epoch, min_views } => {
+        Cmd::SrcRank {
+            meta_file,
+            creator,
+            lane,
+            now_epoch,
+            min_views,
+        } => {
             let stdout = std::fs::read_to_string(&meta_file)?;
             let raw = sourcing::parse_meta_lines(&stdout);
             let cands = sourcing::parse_entries(&raw, &creator, &lane, now_epoch);
@@ -331,20 +351,38 @@ fn main() -> Result<()> {
                 );
             }
         }
-        Cmd::Caprender { srt, duration, title, out } => {
+        Cmd::Caprender {
+            srt,
+            duration,
+            title,
+            out,
+        } => {
             let settings = config::load_settings(&root).ok();
             let text = std::fs::read_to_string(&srt)?;
             let segs = srt::parse_srt(&text);
             let chunks = captions::build_chunks(&segs, captions::MAX_WORDS, captions::MIN_DWELL);
-            let title_opt = if title.is_empty() { None } else { Some(title.as_str()) };
+            let title_opt = if title.is_empty() {
+                None
+            } else {
+                Some(title.as_str())
+            };
             let out_dir = out.unwrap_or_else(|| std::env::temp_dir().join("ycp_caprender"));
             let n = captions::render_overlay(
-                &chunks, duration, &out_dir, title_opt, captions::SIZE, captions::FPS, None,
+                &chunks,
+                duration,
+                &out_dir,
+                title_opt,
+                captions::SIZE,
+                captions::FPS,
+                None,
                 settings.as_ref(),
             )?;
             // Deterministic frame schedule — pipe-delimited for byte-diffing against captions.py.
             let cfg = captions::caption_cfg(settings.as_ref());
-            println!("cfg|{}|{:.4}|{:.4}", cfg.case, cfg.size_pct, cfg.hook_hold_sec);
+            println!(
+                "cfg|{}|{:.4}|{:.4}",
+                cfg.case, cfg.size_pct, cfg.hook_hold_sec
+            );
             println!("frames|{n}");
             for f in 0..n {
                 let t = f as f64 / captions::FPS as f64;
@@ -354,7 +392,11 @@ fn main() -> Result<()> {
                     .find(|c| c.start <= t && t < c.end)
                     .map(|c| c.text())
                     .unwrap_or_default();
-                println!("{f}|{t:.4}|{}|{}", if title_shown { "T" } else { "-" }, active);
+                println!(
+                    "{f}|{t:.4}|{}|{}",
+                    if title_shown { "T" } else { "-" },
+                    active
+                );
             }
             // Prove the rasterizer ran: dims of frame 0 + count of frames with any ink.
             if let Ok(im) = image::open(out_dir.join("00000.png")) {
@@ -369,7 +411,12 @@ fn main() -> Result<()> {
                 .count();
             println!("ink_frames|{ink}");
         }
-        Cmd::CropX { track, scaled_w, crop_w, jump } => {
+        Cmd::CropX {
+            track,
+            scaled_w,
+            crop_w,
+            jump,
+        } => {
             let pts: Vec<(f64, f64)> = track
                 .split(',')
                 .filter_map(|pair| {
@@ -382,7 +429,12 @@ fn main() -> Result<()> {
                 None => println!("none"),
             }
         }
-        Cmd::Autopilot { max_videos, skip_source, no_clip, no_hook } => {
+        Cmd::Autopilot {
+            max_videos,
+            skip_source,
+            no_clip,
+            no_hook,
+        } => {
             let results = autopilot::run(
                 &conn,
                 &root,

@@ -80,8 +80,10 @@ pub struct ClipRow {
     pub length_sec: Option<i64>,
     pub status: Option<String>,
     pub post_title: Option<String>,
+    #[allow(dead_code)] // parity with the Python row shape; read at cutover
     pub post_id: Option<String>,
     pub experiment_id: Option<String>,
+    #[allow(dead_code)] // parity with the Python row shape; read at cutover
     pub variant: Option<String>,
     pub post_url: Option<String>,
     pub posted_at: Option<String>,
@@ -109,7 +111,12 @@ pub fn open(path: &Path) -> Result<Connection> {
 pub fn init(conn: &Connection) -> Result<()> {
     conn.execute_batch(SCHEMA)?;
     // Idempotent migrations for columns added after a db already existed.
-    for col in ["post_title TEXT", "post_id TEXT", "experiment_id TEXT", "variant TEXT"] {
+    for col in [
+        "post_title TEXT",
+        "post_id TEXT",
+        "experiment_id TEXT",
+        "variant TEXT",
+    ] {
         let _ = conn.execute(&format!("ALTER TABLE clips ADD COLUMN {col}"), []);
     }
     Ok(())
@@ -153,7 +160,9 @@ fn row_to_clip(r: &rusqlite::Row) -> rusqlite::Result<ClipRow> {
 /// One row per clip joined to its latest metrics snapshot.
 pub fn clips_with_latest_metrics(conn: &Connection) -> Result<Vec<ClipRow>> {
     let mut stmt = conn.prepare(CLIP_SELECT)?;
-    let rows = stmt.query_map([], row_to_clip)?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let rows = stmt
+        .query_map([], row_to_clip)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
@@ -173,7 +182,9 @@ pub fn pending_qc_clips(conn: &Connection) -> Result<Vec<ClipRow>> {
 fn clips_by_status(conn: &Connection, status: &str) -> Result<Vec<ClipRow>> {
     let sql = format!("{CLIP_SELECT} WHERE c.status = ?1");
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map([status], row_to_clip)?.collect::<rusqlite::Result<Vec<_>>>()?;
+    let rows = stmt
+        .query_map([status], row_to_clip)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
 
@@ -209,7 +220,11 @@ pub fn record_qc(
         "INSERT INTO qc_log (clip_id, reviewer, decision, note, decided_at) VALUES (?1,?2,?3,?4,?5)",
         params![clip_id, reviewer, decision, note, now()],
     )?;
-    let status = if decision == "approve" { "approved" } else { "rejected" };
+    let status = if decision == "approve" {
+        "approved"
+    } else {
+        "rejected"
+    };
     set_clip_status(conn, clip_id, status, &[])
 }
 
@@ -241,8 +256,17 @@ pub fn upsert_source_video(conn: &Connection, r: &SourceVideoRow) -> Result<()> 
              view_velocity=excluded.view_velocity,
              sourced_at=excluded.sourced_at",
         params![
-            r.video_id, r.creator, r.channel_id, r.title, r.url, r.views,
-            r.published_at, r.view_velocity, r.lane, r.status, now()
+            r.video_id,
+            r.creator,
+            r.channel_id,
+            r.title,
+            r.url,
+            r.views,
+            r.published_at,
+            r.view_velocity,
+            r.lane,
+            r.status,
+            now()
         ],
     )?;
     Ok(())
@@ -299,9 +323,20 @@ pub fn insert_clip(conn: &Connection, c: &NewClip) -> Result<()> {
                    NULL, NULL, ?14)
            ON CONFLICT(clip_id) DO NOTHING",
         params![
-            c.clip_id, c.source_video_id, c.source_creator, c.channel, c.platform, c.lane,
-            c.fmt, c.hook_type, c.length_sec, c.post_title, c.experiment_id, c.variant,
-            c.post_url, now()
+            c.clip_id,
+            c.source_video_id,
+            c.source_creator,
+            c.channel,
+            c.platform,
+            c.lane,
+            c.fmt,
+            c.hook_type,
+            c.length_sec,
+            c.post_title,
+            c.experiment_id,
+            c.variant,
+            c.post_url,
+            now()
         ],
     )?;
     Ok(())
@@ -319,8 +354,8 @@ pub fn save_brief(conn: &Connection, week_start: &str, content: &str) -> Result<
 /// Source_video_ids that already have a clip — lets autopilot skip re-clipping (mirrors
 /// db.py `clipped_source_ids`).
 pub fn clipped_source_ids(conn: &Connection) -> Result<std::collections::HashSet<String>> {
-    let mut stmt =
-        conn.prepare("SELECT DISTINCT source_video_id FROM clips WHERE source_video_id IS NOT NULL")?;
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT source_video_id FROM clips WHERE source_video_id IS NOT NULL")?;
     let ids = stmt
         .query_map([], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<std::collections::HashSet<_>>>()?;

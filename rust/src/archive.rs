@@ -34,13 +34,26 @@ fn expand_tilde(p: &str) -> PathBuf {
 
 /// Copy a clip + a JSON sidecar to the configured drive. Returns the destination, or None
 /// when archiving is off or fails (caller treats it as best-effort). Mirrors `archive_clip`.
-pub fn archive_clip(settings: &serde_yaml::Value, clip_path: &Path, meta: &Value) -> Option<String> {
+pub fn archive_clip(
+    settings: &serde_yaml::Value,
+    clip_path: &Path,
+    meta: &Value,
+) -> Option<String> {
     let cfg = &settings["archive"];
-    let dest = cfg.get("dest").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let dest = cfg
+        .get("dest")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
     if dest.is_empty() || !clip_path.exists() {
         return None;
     }
-    let sub = if cfg.get("subfolder_by_channel").and_then(|v| v.as_bool()).unwrap_or(true) {
+    let sub = if cfg
+        .get("subfolder_by_channel")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+    {
         // Python: meta.get("channel") or "clips" — empty string falls through to "clips".
         meta.get("channel")
             .and_then(|v| v.as_str())
@@ -65,7 +78,11 @@ pub fn archive_clip(settings: &serde_yaml::Value, clip_path: &Path, meta: &Value
 
     let target = if is_rclone(&dest) {
         let base = dest.trim_end_matches('/');
-        let target = if sub.is_empty() { base.to_string() } else { format!("{base}/{sub}") };
+        let target = if sub.is_empty() {
+            base.to_string()
+        } else {
+            format!("{base}/{sub}")
+        };
         for f in &files {
             // ponytail: no watchdog — rclone copy of a single file is bounded; add a timeout
             // wrapper if a hung remote ever stalls the pipeline.
@@ -83,7 +100,11 @@ pub fn archive_clip(settings: &serde_yaml::Value, clip_path: &Path, meta: &Value
         target
     } else {
         let base = expand_tilde(&dest);
-        let target_dir = if sub.is_empty() { base } else { base.join(&sub) };
+        let target_dir = if sub.is_empty() {
+            base
+        } else {
+            base.join(&sub)
+        };
         if std::fs::create_dir_all(&target_dir).is_err() {
             return None;
         }
@@ -96,7 +117,11 @@ pub fn archive_clip(settings: &serde_yaml::Value, clip_path: &Path, meta: &Value
         target_dir.to_string_lossy().to_string()
     };
 
-    Some(format!("{}/{}", target, clip_path.file_name()?.to_string_lossy()))
+    Some(format!(
+        "{}/{}",
+        target,
+        clip_path.file_name()?.to_string_lossy()
+    ))
 }
 
 /// Delete local clip files (+ sidecars) for clips already POSTED — they're live + archived,
@@ -108,12 +133,17 @@ pub fn prune_local(conn: &Connection, root: &Path) -> Result<i64> {
     }
     let ids: Vec<String> = {
         let mut stmt = conn.prepare("SELECT clip_id FROM clips WHERE status='posted'")?;
-        let v = stmt.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+        let v = stmt
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
         v
     };
     let mut removed = 0;
     for cid in ids {
-        for f in [clips_dir.join(format!("{cid}.mp4")), clips_dir.join(format!("{cid}.json"))] {
+        for f in [
+            clips_dir.join(format!("{cid}.mp4")),
+            clips_dir.join(format!("{cid}.json")),
+        ] {
             if f.exists() && std::fs::remove_file(&f).is_ok() {
                 removed += 1;
             }

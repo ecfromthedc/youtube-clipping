@@ -31,7 +31,7 @@ fn fmt_g(x: f64) -> String {
     let sci = format!("{:.*e}", (PREC - 1) as usize, x); // e.g. "9.17000e1"
     let (mantissa, exp_str) = sci.split_once('e').expect("scientific form has 'e'");
     let exp: i32 = exp_str.parse().expect("exponent is an int");
-    if exp >= -4 && exp < PREC {
+    if (-4..PREC).contains(&exp) {
         let decimals = (PREC - 1 - exp).max(0) as usize;
         strip_trailing_zeros(format!("{x:.decimals$}"))
     } else {

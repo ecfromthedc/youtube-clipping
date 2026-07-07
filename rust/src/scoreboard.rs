@@ -65,14 +65,11 @@ const QUESTS: &[(&str, &[&str])] = &[
     ),
 ];
 
+/// One LEVELS row: (run-rate threshold, name, emoji, roster blurb).
+type Level = (f64, &'static str, &'static str, &'static str);
+
 /// Highest level reached → (1-based level number, current level, next level or None).
-fn level_of(
-    run_rate: f64,
-) -> (
-    usize,
-    &'static (f64, &'static str, &'static str, &'static str),
-    Option<&'static (f64, &'static str, &'static str, &'static str)>,
-) {
+fn level_of(run_rate: f64) -> (usize, &'static Level, Option<&'static Level>) {
     let mut idx = 0;
     for (i, lvl) in LEVELS.iter().enumerate() {
         if run_rate >= lvl.0 {

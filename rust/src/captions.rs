@@ -137,9 +137,18 @@ pub fn caption_cfg(settings: Option<&serde_yaml::Value>) -> CapCfg {
         .and_then(|v| v.as_str())
         .unwrap_or(CAPTION_CASE)
         .to_lowercase();
-    let size_pct = c.and_then(|c| yaml_num(c, "size_pct")).unwrap_or(CAPTION_SIZE_PCT) / 100.0;
-    let hook_hold_sec = c.and_then(|c| yaml_num(c, "hook_hold_sec")).unwrap_or(HOOK_HOLD_SEC);
-    CapCfg { case, size_pct, hook_hold_sec }
+    let size_pct = c
+        .and_then(|c| yaml_num(c, "size_pct"))
+        .unwrap_or(CAPTION_SIZE_PCT)
+        / 100.0;
+    let hook_hold_sec = c
+        .and_then(|c| yaml_num(c, "hook_hold_sec"))
+        .unwrap_or(HOOK_HOLD_SEC);
+    CapCfg {
+        case,
+        size_pct,
+        hook_hold_sec,
+    }
 }
 
 /// Mirror `_case`.
@@ -243,7 +252,16 @@ fn blend(img: &mut RgbaImage, x: i32, y: i32, color: Rgba<u8>, coverage: f32) {
 /// ponytail: outline = stamp a stroke-radius disk per covered glyph pixel — O(ink_px · stroke²).
 /// Fine for a background pipeline; if a frame ever renders slow, swap to a separable max-dilation
 /// of a single glyph coverage mask.
-pub(crate) fn draw_word(img: &mut RgbaImage, font: &FontVec, text: &str, px: f32, x_left: f32, y_top: f32, fill: Rgba<u8>, stroke: u32) {
+pub(crate) fn draw_word(
+    img: &mut RgbaImage,
+    font: &FontVec,
+    text: &str,
+    px: f32,
+    x_left: f32,
+    y_top: f32,
+    fill: Rgba<u8>,
+    stroke: u32,
+) {
     let scale = PxScale::from(px);
     let sf = font.as_scaled(scale);
     let baseline = y_top + sf.ascent();
@@ -282,12 +300,29 @@ pub(crate) fn draw_word(img: &mut RgbaImage, font: &FontVec, text: &str, px: f32
 }
 
 /// Center a chunk's words at vertical `y`, highlight the active word at time `t`. Mirrors `_draw_chunk`.
-fn draw_chunk(img: &mut RgbaImage, font: &FontVec, chunk: &Chunk, t: f64, w: u32, y: f32, max_px: f32, stroke: u32, case: &str) {
+fn draw_chunk(
+    img: &mut RgbaImage,
+    font: &FontVec,
+    chunk: &Chunk,
+    t: f64,
+    w: u32,
+    y: f32,
+    max_px: f32,
+    stroke: u32,
+    case: &str,
+) {
     let joined = case_str(&chunk.text(), case);
     let px = fit_px(font, &joined, max_px, w as f32 * 0.92, stroke);
     let gap = (w as f64 * 0.018) as i64 as f32; // int(w*0.018)
-    let words: Vec<String> = chunk.words.iter().map(|wd| case_str(&wd.text, case)).collect();
-    let widths: Vec<f32> = words.iter().map(|s| text_width(font, s, px, stroke)).collect();
+    let words: Vec<String> = chunk
+        .words
+        .iter()
+        .map(|wd| case_str(&wd.text, case))
+        .collect();
+    let widths: Vec<f32> = words
+        .iter()
+        .map(|s| text_width(font, s, px, stroke))
+        .collect();
     let total: f32 = widths.iter().sum::<f32>() + gap * (words.len() as f32 - 1.0);
     let mut x = ((w as f32 - total) / 2.0).floor(); // (w - total)//2
     for ((wd, txt), ww) in chunk.words.iter().zip(words.iter()).zip(widths.iter()) {
@@ -299,11 +334,24 @@ fn draw_chunk(img: &mut RgbaImage, font: &FontVec, chunk: &Chunk, t: f64, w: u32
 }
 
 /// Word-wrap the hook title to `max_w` and draw centered lines from `y`. Mirrors `_draw_title`.
-fn draw_title(img: &mut RgbaImage, font: &FontVec, text: &str, px: f32, max_w: f32, w: u32, y: f32, stroke: u32) {
+fn draw_title(
+    img: &mut RgbaImage,
+    font: &FontVec,
+    text: &str,
+    px: f32,
+    max_w: f32,
+    w: u32,
+    y: f32,
+    stroke: u32,
+) {
     let mut lines: Vec<String> = Vec::new();
     let mut cur = String::new();
     for word in text.split_whitespace() {
-        let trial = if cur.is_empty() { word.to_string() } else { format!("{cur} {word}") };
+        let trial = if cur.is_empty() {
+            word.to_string()
+        } else {
+            format!("{cur} {word}")
+        };
         if cur.is_empty() || text_width(font, &trial, px, stroke) <= max_w {
             cur = trial;
         } else {
@@ -349,12 +397,31 @@ pub fn render_overlay(
         if let (Some(ttl), Some(fnt)) = (title, font.as_ref()) {
             if t < title_dur {
                 let cased = case_str(ttl, &cfg.case);
-                draw_title(&mut img, fnt, &cased, title_size, w as f32 * 0.86, w, (h as f64 * 0.10) as i64 as f32, stroke);
+                draw_title(
+                    &mut img,
+                    fnt,
+                    &cased,
+                    title_size,
+                    w as f32 * 0.86,
+                    w,
+                    (h as f64 * 0.10) as i64 as f32,
+                    stroke,
+                );
             }
         }
         if let Some(fnt) = font.as_ref() {
             if let Some(ch) = chunks.iter().find(|c| c.start <= t && t < c.end) {
-                draw_chunk(&mut img, fnt, ch, t, w, (h as f64 * 0.70) as i64 as f32, cap_max, stroke, &cfg.case);
+                draw_chunk(
+                    &mut img,
+                    fnt,
+                    ch,
+                    t,
+                    w,
+                    (h as f64 * 0.70) as i64 as f32,
+                    cap_max,
+                    stroke,
+                    &cfg.case,
+                );
             }
         }
         img.save(out_dir.join(format!("{f:05}.png")))
@@ -367,11 +434,21 @@ pub fn render_overlay(
 #[allow(dead_code)] // wired by the autopilot row
 fn probe_duration(path: &Path) -> f64 {
     match Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(path)
         .output()
     {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0.0),
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(0.0),
         Err(_) => 0.0,
     }
 }
@@ -397,7 +474,9 @@ pub fn burn_captions(
         chunks.iter().map(|c| c.end).fold(0.0_f64, f64::max) + 0.5
     };
     let frames = workdir.join("capframes");
-    render_overlay(chunks, duration, &frames, title, size, fps, font_path, settings)?;
+    render_overlay(
+        chunks, duration, &frames, title, size, fps, font_path, settings,
+    )?;
     let tmp_out = workdir.join("captioned.mp4");
     let frame_glob = frames.join("%05d.png");
     let out = Command::new("ffmpeg")
@@ -408,7 +487,14 @@ pub fn burn_captions(
         .args([
             "-filter_complex",
             "[0:v][1:v]overlay=0:0:format=auto:eof_action=pass",
-            "-c:v", "libx264", "-c:a", "copy", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "copy",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
         ])
         .arg(&tmp_out)
         .output()?;
@@ -458,7 +544,9 @@ pub(crate) fn render_rank_overlay(
     // Half-frame-tall numeral, fit to ~32% of frame width so it never crowds the captions.
     let max_px = h as f32 * 0.5;
     let max_w = w as f32 * 0.32;
-    let px = font.as_ref().map_or(max_px, |f| fit_px(f, &numeral, max_px, max_w, stroke));
+    let px = font
+        .as_ref()
+        .map_or(max_px, |f| fit_px(f, &numeral, max_px, max_w, stroke));
 
     for f in 0..n_frames {
         let mut img = RgbaImage::from_pixel(w, h, Rgba([0, 0, 0, 0]));
@@ -470,7 +558,9 @@ pub(crate) fn render_rank_overlay(
             let y_top = ((h as f32 - th) / 2.0).floor();
             // Stamp a soft glow disk behind the numeral for extra pop on busy footage.
             let _ = tw; // width computed for centering if we ever want it; left-anchor for now
-            draw_word(&mut img, fnt, &numeral, px, x_left, y_top, RANK_FILL, stroke);
+            draw_word(
+                &mut img, fnt, &numeral, px, x_left, y_top, RANK_FILL, stroke,
+            );
         }
         img.save(out_dir.join(format!("{f:05}.png")))
             .with_context(|| format!("write rank frame {f}"))?;

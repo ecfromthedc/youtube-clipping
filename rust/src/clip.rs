@@ -47,7 +47,12 @@ pub struct Candidate {
 
 impl Candidate {
     pub fn new(start: f64, end: f64, text: impl Into<String>, score: f64) -> Self {
-        Self { start, end, text: text.into(), score }
+        Self {
+            start,
+            end,
+            text: text.into(),
+            score,
+        }
     }
     /// round(end - start, 2)
     pub fn duration(&self) -> f64 {
@@ -62,7 +67,11 @@ pub fn score_candidate(text: &str, duration: f64) -> f64 {
     let mut score = 1.0;
     score += t.matches('?').count() as f64 * 0.6;
     score += t.matches('!').count() as f64 * 0.3;
-    score += if t.chars().any(|c| c.is_ascii_digit()) { 0.4 } else { 0.0 };
+    score += if t.chars().any(|c| c.is_ascii_digit()) {
+        0.4
+    } else {
+        0.0
+    };
     let tokens: Vec<&str> = t.split_whitespace().collect();
     let hooks = hook_words().iter().filter(|w| tokens.contains(*w)).count();
     score += 0.3 * hooks as f64;
@@ -77,7 +86,12 @@ pub fn score_candidate(text: &str, duration: f64) -> f64 {
 
 /// Group consecutive segments into candidate windows at the max_len boundary, score each, return
 /// ranked (best first). Mirrors `plan_clips`. Pure.
-pub fn plan_clips(segments: &[Segment], min_len: f64, max_len: f64, top: Option<usize>) -> Vec<Candidate> {
+pub fn plan_clips(
+    segments: &[Segment],
+    min_len: f64,
+    max_len: f64,
+    top: Option<usize>,
+) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = Vec::new();
     let mut buf: Vec<&Segment> = Vec::new();
 
@@ -88,7 +102,13 @@ pub fn plan_clips(segments: &[Segment], min_len: f64, max_len: f64, top: Option<
         let start = buf[0].start;
         let end = (buf[buf.len() - 1].end).min(start + max_len); // cap window at max_len (mirror Python)
         if end - start >= min_len {
-            let text = buf.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ").trim().to_string();
+            let text = buf
+                .iter()
+                .map(|s| s.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string();
             let score = score_candidate(&text, end - start);
             out.push(Candidate::new(start, end, text, score));
         }
@@ -104,7 +124,11 @@ pub fn plan_clips(segments: &[Segment], min_len: f64, max_len: f64, top: Option<
     flush(&buf, &mut candidates);
 
     // sorted(..., reverse=True) — stable on score ties.
-    candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    candidates.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     match top {
         Some(n) => candidates.into_iter().take(n).collect(),
         None => candidates,
@@ -133,7 +157,11 @@ pub fn download(url: &str, workdir: &Path, window_sec: Option<i64>) -> Result<Pa
     let mut cmd = Command::new("yt-dlp");
     cmd.args(["-f", "mp4/best", "-o"]).arg(&out);
     if let Some(w) = window_sec {
-        cmd.args(["--download-sections", &format!("*0-{w}"), "--force-keyframes-at-cuts"]);
+        cmd.args([
+            "--download-sections",
+            &format!("*0-{w}"),
+            "--force-keyframes-at-cuts",
+        ]);
     }
     cmd.arg(url);
     let proc = cmd.output()?;
@@ -151,16 +179,30 @@ pub fn download(url: &str, workdir: &Path, window_sec: Option<i64>) -> Result<Pa
         }
     }
     let err = String::from_utf8_lossy(&proc.stderr);
-    bail!("download failed: {}", &err.trim()[..err.trim().len().min(300)]);
+    bail!(
+        "download failed: {}",
+        &err.trim()[..err.trim().len().min(300)]
+    );
 }
 
 /// Trim the candidate window, then reframe to a 9:16 vertical. Mirrors `cut_vertical`.
-pub fn cut_vertical(root: &Path, video: &Path, cand: &Candidate, out_path: &Path, workdir: &Path) -> Result<PathBuf> {
+pub fn cut_vertical(
+    root: &Path,
+    video: &Path,
+    cand: &Candidate,
+    out_path: &Path,
+    workdir: &Path,
+) -> Result<PathBuf> {
     let trimmed = workdir.join("trim.mp4");
     let proc = Command::new("ffmpeg")
         .args(["-y", "-i"])
         .arg(video)
-        .args(["-ss", &fmt_secs(cand.start), "-t", &fmt_secs(cand.duration())])
+        .args([
+            "-ss",
+            &fmt_secs(cand.start),
+            "-t",
+            &fmt_secs(cand.duration()),
+        ])
         .args(["-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast"])
         .arg(&trimmed)
         .current_dir(workdir)
@@ -174,13 +216,23 @@ pub fn cut_vertical(root: &Path, video: &Path, cand: &Candidate, out_path: &Path
         .ok()
         .and_then(|s| s["reframe"]["mode"].as_str().map(String::from))
         .unwrap_or_else(|| "face".to_string());
-    reframe::reframe(&trimmed, out_path, workdir, &mode, (reframe::TARGET_W, reframe::TARGET_H))
+    reframe::reframe(
+        &trimmed,
+        out_path,
+        workdir,
+        &mode,
+        (reframe::TARGET_W, reframe::TARGET_H),
+    )
 }
 
 /// Plain decimal seconds for ffmpeg -ss/-t (no scientific notation).
 fn fmt_secs(x: f64) -> String {
     let s = format!("{x}");
-    if s.contains('e') || s.contains('E') { format!("{x:.3}") } else { s }
+    if s.contains('e') || s.contains('E') {
+        format!("{x:.3}")
+    } else {
+        s
+    }
 }
 
 // ── full pipeline (orchestrator) ─────────────────────────────────────────────
@@ -246,14 +298,28 @@ pub struct Created {
 /// Full pipeline: url → ranked vertical clips with hook title + captions, registered for QC.
 /// Mirrors clip.py `run`. The temp workdir is removed on the way out (best-effort), like the
 /// Python `TemporaryDirectory`.
-pub fn run(conn: &rusqlite::Connection, root: &Path, url: &str, opts: &RunOpts) -> Result<Vec<Created>> {
+pub fn run(
+    conn: &rusqlite::Connection,
+    root: &Path,
+    url: &str,
+    opts: &RunOpts,
+) -> Result<Vec<Created>> {
     let settings = config::load_settings(root)?;
     let mut created: Vec<Created> = Vec::new();
     let vid_hash = sha1_hex8(url);
     let workdir = std::env::temp_dir().join(format!("ycp-clip-{}-{vid_hash}", std::process::id()));
     std::fs::create_dir_all(&workdir)?;
 
-    let body = run_inner(conn, root, url, opts, &settings, &vid_hash, &workdir, &mut created);
+    let body = run_inner(
+        conn,
+        root,
+        url,
+        opts,
+        &settings,
+        &vid_hash,
+        &workdir,
+        &mut created,
+    );
     let _ = std::fs::remove_dir_all(&workdir);
     body?;
     Ok(created)
@@ -292,7 +358,11 @@ fn run_inner(
     let top_idx = candidates
         .iter()
         .enumerate()
-        .max_by(|(_, a), (_, b)| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|(_, a), (_, b)| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
         .map(|(i, _)| i);
 
     let prefer = optimize::preferred_hooks(&optimize::Paths::new(root));
@@ -321,21 +391,43 @@ fn run_inner(
 
         // Pick the hook set: a manual title, an A/B hero set, or a single best hook.
         let (hook_set, exp_id): (Vec<hooks::Hook>, Option<String>) = if let Some(t) = opts.title {
-            (vec![hooks::Hook { text: t.to_string(), typ: "manual".to_string() }], None)
+            (
+                vec![hooks::Hook {
+                    text: t.to_string(),
+                    typ: "manual".to_string(),
+                }],
+                None,
+            )
         } else if ab_enabled && Some(i) == top_idx && cand.score >= hero_score {
             let hs = hooks::variants(root, &cand.text, opts.angle, variants_k, 10, None, &prefer);
-            let eid = if hs.len() > 1 { Some(format!("{clip_id}-ab")) } else { None };
+            let eid = if hs.len() > 1 {
+                Some(format!("{clip_id}-ab"))
+            } else {
+                None
+            };
             (hs, eid)
         } else {
-            (vec![hooks::best(root, &cand.text, opts.angle, 6, 10, None, &prefer)], None)
+            (
+                vec![hooks::best(
+                    root, &cand.text, opts.angle, 6, 10, None, &prefer,
+                )],
+                None,
+            )
         };
         if exp_id.is_some() {
-            println!("  · hero moment (score {:.2}) → A/B {} hook angles", cand.score, hook_set.len());
+            println!(
+                "  · hero moment (score {:.2}) → A/B {} hook angles",
+                cand.score,
+                hook_set.len()
+            );
         }
 
         for (vi, hook) in hook_set.iter().enumerate() {
-            let variant_id =
-                if hook_set.len() == 1 { clip_id.clone() } else { format!("{clip_id}-v{vi}") };
+            let variant_id = if hook_set.len() == 1 {
+                clip_id.clone()
+            } else {
+                format!("{clip_id}-v{vi}")
+            };
             let mut cur = staged.clone();
             match captions::burn_captions(
                 &staged,
@@ -352,7 +444,11 @@ fn run_inner(
                 Err(exc) => println!("  · captions failed ({exc}); shipping plain clip"),
             }
             if let Some(gp) = opts.gameplay {
-                cur = enhance::stack_gameplay(&cur, gp, &workdir.join(format!("{variant_id}_gp.mp4")))?;
+                cur = enhance::stack_gameplay(
+                    &cur,
+                    gp,
+                    &workdir.join(format!("{variant_id}_gp.mp4")),
+                )?;
             }
             let out = clips_dir(root).join(format!("{variant_id}.mp4"));
             if let Some(p) = out.parent() {
@@ -364,7 +460,9 @@ fn run_inner(
                 std::fs::copy(&staged, &out)?;
             } else {
                 std::fs::rename(&cur, &out).or_else(|_| {
-                    std::fs::copy(&cur, &out).map(|_| ()).and_then(|_| std::fs::remove_file(&cur))
+                    std::fs::copy(&cur, &out)
+                        .map(|_| ())
+                        .and_then(|_| std::fs::remove_file(&cur))
                 })?;
             }
             db::insert_clip(
@@ -420,7 +518,9 @@ mod tests {
         let hooky = score_candidate("Why did nobody tell you the truth about 3 mistakes?", 30.0);
         let bland = score_candidate("and then we walked over there slowly", 30.0);
         assert!(hooky > bland);
-        assert!(score_candidate("a normal sentence", 30.0) > score_candidate("a normal sentence", 90.0));
+        assert!(
+            score_candidate("a normal sentence", 30.0) > score_candidate("a normal sentence", 90.0)
+        );
     }
 
     #[test]
@@ -441,8 +541,9 @@ mod tests {
 
     #[test]
     fn plan_clips_respects_max_len() {
-        let segs: Vec<Segment> =
-            (0..10).map(|i| Segment::new(i as f64 * 10.0, (i + 1) as f64 * 10.0, format!("seg {i}"))).collect();
+        let segs: Vec<Segment> = (0..10)
+            .map(|i| Segment::new(i as f64 * 10.0, (i + 1) as f64 * 10.0, format!("seg {i}")))
+            .collect();
         let cands = plan_clips(&segs, 15.0, 40.0, None);
         assert!(cands.iter().all(|c| c.duration() <= 40.0));
     }

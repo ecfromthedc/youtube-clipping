@@ -52,6 +52,7 @@ impl ScoreCfg {
 
 #[derive(Clone, Debug)]
 pub struct Scored {
+    #[allow(dead_code)] // parity with the Python dict shape; read at cutover
     pub clip_id: String,
     pub source_creator: String,
     pub fmt: String,
@@ -124,13 +125,23 @@ pub fn compute_scores(rows: &[ClipRow], cfg: &ScoreCfg) -> Vec<Scored> {
     if rows.is_empty() {
         return vec![];
     }
-    let views: Vec<f64> = rows.iter().map(|r| (r.views.max(0) as f64).ln_1p()).collect();
-    let ret: Vec<f64> = rows.iter().map(|r| r.retention_pct.unwrap_or(0.0).max(0.0)).collect();
+    let views: Vec<f64> = rows
+        .iter()
+        .map(|r| (r.views.max(0) as f64).ln_1p())
+        .collect();
+    let ret: Vec<f64> = rows
+        .iter()
+        .map(|r| r.retention_pct.unwrap_or(0.0).max(0.0))
+        .collect();
     let rev1k: Vec<f64> = rows
         .iter()
         .map(|r| {
             let v = r.views.max(0) as f64;
-            if v > 0.0 { r.ad_revenue / (v / 1000.0) } else { 0.0 }
+            if v > 0.0 {
+                r.ad_revenue / (v / 1000.0)
+            } else {
+                0.0
+            }
         })
         .collect();
     let (nv, nr, nrev) = (minmax(&views), minmax(&ret), minmax(&rev1k));
@@ -208,8 +219,16 @@ pub fn scale_and_kill(rolled: &[Rollup], scale_q: f64, kill_q: f64) -> (Vec<Roll
     scores.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let hi = quantile(&scores, scale_q);
     let lo = quantile(&scores, kill_q);
-    let scale: Vec<Rollup> = rolled.iter().filter(|r| r.avg_score >= hi).cloned().collect();
-    let mut kill: Vec<Rollup> = rolled.iter().filter(|r| r.avg_score <= lo).cloned().collect();
+    let scale: Vec<Rollup> = rolled
+        .iter()
+        .filter(|r| r.avg_score >= hi)
+        .cloned()
+        .collect();
+    let mut kill: Vec<Rollup> = rolled
+        .iter()
+        .filter(|r| r.avg_score <= lo)
+        .cloned()
+        .collect();
     kill.sort_by(|a, b| a.avg_score.partial_cmp(&b.avg_score).unwrap());
     (scale, kill)
 }
@@ -229,7 +248,11 @@ pub fn analyze(rows: &[ClipRow], cfg: &ScoreCfg) -> Analysis {
         by_length: rollup(&scored, |s| s.length_bucket.clone(), cfg.min_sample),
         by_platform: rollup(&scored, |s| s.platform.clone(), cfg.min_sample),
         by_hour: rollup(
-            &scored.iter().filter(|s| s.post_hour.is_some()).cloned().collect::<Vec<_>>(),
+            &scored
+                .iter()
+                .filter(|s| s.post_hour.is_some())
+                .cloned()
+                .collect::<Vec<_>>(),
             |s| s.post_hour.unwrap().to_string(),
             cfg.min_sample,
         ),

@@ -17,7 +17,7 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
-use crate::{captions, clip, srt, transcribe, voice};
+use crate::{captions, clip, transcribe, voice};
 
 /// Commentary render options.
 pub struct CommentaryOpts {
@@ -99,8 +99,8 @@ fn render_inner(
     .context("synthesize commentary VO")?;
 
     // 3. Transcribe VO for caption timing.
-    let segs = transcribe::transcribe(root, &vo_path, workdir)
-        .context("transcribe commentary VO")?;
+    let segs =
+        transcribe::transcribe(root, &vo_path, workdir).context("transcribe commentary VO")?;
     let chunks = captions::build_chunks(&segs, captions::MAX_WORDS, captions::MIN_DWELL);
 
     // 4. Render caption PNGs.
@@ -138,13 +138,23 @@ fn render_inner(
 
     let out = Command::new("ffmpeg")
         .arg("-y")
-        .arg("-i").arg(&vertical)          // input 0: vertical clip (v + a)
-        .args(["-framerate", &captions::FPS.to_string(), "-start_number", "0", "-i"])
-        .arg(&frame_glob)                   // input 1: captions
-        .arg("-i").arg(&vo_path)            // input 2: VO
+        .arg("-i")
+        .arg(&vertical) // input 0: vertical clip (v + a)
+        .args([
+            "-framerate",
+            &captions::FPS.to_string(),
+            "-start_number",
+            "0",
+            "-i",
+        ])
+        .arg(&frame_glob) // input 1: captions
+        .arg("-i")
+        .arg(&vo_path) // input 2: VO
         .args(["-filter_complex", &filter])
         .args(["-map", "[v]", "-map", "[a]"])
-        .args(["-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p"])
+        .args([
+            "-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        ])
         .args(["-shortest"])
         .arg(&tmp)
         .output()?;
@@ -155,7 +165,9 @@ fn render_inner(
         bail!("commentary compose failed: {}", tail.trim());
     }
     std::fs::rename(&tmp, out_path).or_else(|_| {
-        std::fs::copy(&tmp, out_path).map(|_| ()).and_then(|_| std::fs::remove_file(&tmp))
+        std::fs::copy(&tmp, out_path)
+            .map(|_| ())
+            .and_then(|_| std::fs::remove_file(&tmp))
     })?;
     Ok(out_path.to_path_buf())
 }
@@ -163,11 +175,21 @@ fn render_inner(
 /// ffprobe → duration seconds; 0.0 if unreadable.
 fn ffprobe_duration(path: &Path) -> f64 {
     match Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(path)
         .output()
     {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0.0),
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(0.0),
         Err(_) => 0.0,
     }
 }

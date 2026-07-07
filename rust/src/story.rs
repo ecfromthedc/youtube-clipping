@@ -21,7 +21,7 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
-use crate::{captions, srt, transcribe, voice};
+use crate::{captions, transcribe, voice};
 
 /// Storytelling render options.
 pub struct StoryOpts {
@@ -139,13 +139,16 @@ fn render_inner(
         .arg(&opts.background)
         // input 1: caption PNG sequence
         .args([
-            "-framerate", &captions::FPS.to_string(),
-            "-start_number", "0",
+            "-framerate",
+            &captions::FPS.to_string(),
+            "-start_number",
+            "0",
             "-i",
         ])
         .arg(&frame_glob)
         // input 2: voiceover audio (replaces background audio)
-        .arg("-i").arg(&vo_path);
+        .arg("-i")
+        .arg(&vo_path);
 
     // filter: scale bg to cover 9:16, crop center, overlay captions, then trim to VO length
     let filter = format!(
@@ -154,7 +157,9 @@ fn render_inner(
     );
     cmd.args(["-filter_complex", &filter])
         .args(["-map", "[v]", "-map", "2:a"])
-        .args(["-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p"])
+        .args([
+            "-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        ])
         .args(["-shortest"]) // stop at the shorter of (looped bg, VO)
         .arg(&tmp);
 
@@ -165,7 +170,9 @@ fn render_inner(
         bail!("storytelling compose failed: {}", tail.trim());
     }
     std::fs::rename(&tmp, out_path).or_else(|_| {
-        std::fs::copy(&tmp, out_path).map(|_| ()).and_then(|_| std::fs::remove_file(&tmp))
+        std::fs::copy(&tmp, out_path)
+            .map(|_| ())
+            .and_then(|_| std::fs::remove_file(&tmp))
     })?;
     Ok(out_path.to_path_buf())
 }
@@ -173,11 +180,21 @@ fn render_inner(
 /// ffprobe → duration seconds; 0.0 if unreadable.
 fn ffprobe_duration(path: &Path) -> f64 {
     match Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0"])
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(path)
         .output()
     {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0.0),
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse()
+            .unwrap_or(0.0),
         Err(_) => 0.0,
     }
 }

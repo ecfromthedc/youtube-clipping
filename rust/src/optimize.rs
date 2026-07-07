@@ -39,13 +39,22 @@ impl Factors {
     pub fn from_settings(s: &serde_yaml::Value) -> Self {
         let o = &s["optimize"];
         let f = |k: &str, d: f64| o[k].as_f64().unwrap_or(d);
-        Factors { boost: f("boost", 1.5), suppress: f("suppress", 0.4), floor: f("floor", 0.1) }
+        Factors {
+            boost: f("boost", 1.5),
+            suppress: f("suppress", 0.4),
+            floor: f("floor", 0.1),
+        }
     }
 }
 
 /// Per-creator source multiplier: scaled winners boosted, killed losers suppressed (kill
 /// applied first so a creator in both ends up boosted). Pure.
-pub fn creator_weights(a: &Analysis, f: &Factors, scale_q: f64, kill_q: f64) -> BTreeMap<String, f64> {
+pub fn creator_weights(
+    a: &Analysis,
+    f: &Factors,
+    scale_q: f64,
+    kill_q: f64,
+) -> BTreeMap<String, f64> {
     let mut w = BTreeMap::new();
     if a.by_creator.is_empty() {
         return w;
@@ -95,7 +104,11 @@ pub fn load_weights(p: &Paths) -> BTreeMap<String, f64> {
         .unwrap_or_default()
 }
 
-pub fn save_creative(p: &Paths, prefer_hooks: &[String], prefer_length: &Option<String>) -> Result<()> {
+pub fn save_creative(
+    p: &Paths,
+    prefer_hooks: &[String],
+    prefer_length: &Option<String>,
+) -> Result<()> {
     let v = serde_json::json!({ "prefer_hooks": prefer_hooks, "prefer_length": prefer_length });
     std::fs::write(&p.creative, serde_json::to_string_pretty(&v)?)?;
     Ok(())
@@ -109,7 +122,11 @@ pub fn preferred_hooks(p: &Paths) -> Vec<String> {
         .unwrap_or(serde_json::Value::Null);
     let inferred: Vec<String> = creative["prefer_hooks"]
         .as_array()
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
     let proven = read_json_array(&p.ab_winners);
     let mut out = proven;
@@ -126,30 +143,65 @@ fn top_rows(rs: &[crate::scoring::Rollup], n: usize) -> String {
     if rs.is_empty() {
         return "—".to_string();
     }
-    rs.iter().take(n).map(|r| format!("{} ({:.0})", r.key, r.avg_score)).collect::<Vec<_>>().join(", ")
+    rs.iter()
+        .take(n)
+        .map(|r| format!("{} ({:.0})", r.key, r.avg_score))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub fn format_entry(a: &Analysis, weights: &BTreeMap<String, f64>, today: &str) -> String {
     let total_views = a.scored.iter().map(|s| s.views).sum::<f64>() as i64;
     let (prefer_hooks, prefer_length) = creative_prefs(a);
-    let boosted: Vec<&String> = weights.iter().filter(|(_, v)| **v > 1.0).map(|(k, _)| k).collect();
-    let cut: Vec<&String> = weights.iter().filter(|(_, v)| **v < 1.0).map(|(k, _)| k).collect();
+    let boosted: Vec<&String> = weights
+        .iter()
+        .filter(|(_, v)| **v > 1.0)
+        .map(|(k, _)| k)
+        .collect();
+    let cut: Vec<&String> = weights
+        .iter()
+        .filter(|(_, v)| **v < 1.0)
+        .map(|(k, _)| k)
+        .collect();
     let join = |v: &[&String]| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
     [
         format!("## {today}"),
-        format!("- **Sampled:** {} clips · {} total views so far.", a.scored.len(), crate::util::comma(total_views)),
+        format!(
+            "- **Sampled:** {} clips · {} total views so far.",
+            a.scored.len(),
+            crate::util::comma(total_views)
+        ),
         format!("- **Top creators:** {}", top_rows(&a.by_creator, 3)),
-        format!("- **Top formats:** {} · **lengths:** {}", top_rows(&a.by_format, 3), top_rows(&a.by_length, 3)),
+        format!(
+            "- **Top formats:** {} · **lengths:** {}",
+            top_rows(&a.by_format, 3),
+            top_rows(&a.by_length, 3)
+        ),
         format!(
             "- **Winning hook styles:** {} · **best length:** {} → fed back into hook generation.",
-            if prefer_hooks.is_empty() { "— (not learned yet)".to_string() } else { prefer_hooks.join(", ") },
+            if prefer_hooks.is_empty() {
+                "— (not learned yet)".to_string()
+            } else {
+                prefer_hooks.join(", ")
+            },
             prefer_length.unwrap_or_else(|| "—".into())
         ),
         format!(
             "- **Doubling down on:** {}",
-            if boosted.is_empty() { "— (not enough signal yet)".to_string() } else { join(&boosted) }
+            if boosted.is_empty() {
+                "— (not enough signal yet)".to_string()
+            } else {
+                join(&boosted)
+            }
         ),
-        format!("- **Starving:** {}", if cut.is_empty() { "—".to_string() } else { join(&cut) }),
+        format!(
+            "- **Starving:** {}",
+            if cut.is_empty() {
+                "—".to_string()
+            } else {
+                join(&cut)
+            }
+        ),
         "- **Why:** winners (top-quantile virality) get sourced harder next cycle + their \
          hook styles bias generation; losers get throttled. → learned-weights/creative.json."
             .to_string(),
@@ -191,7 +243,15 @@ pub fn run(conn: &rusqlite::Connection, root: &Path, today: &str) -> Result<RunS
     append_log(&p, &format_entry(&a, &weights, today))?;
     Ok(RunSummary {
         clips: a.scored.len(),
-        boosted: weights.iter().filter(|(_, v)| **v > 1.0).map(|(k, _)| k.clone()).collect(),
-        suppressed: weights.iter().filter(|(_, v)| **v < 1.0).map(|(k, _)| k.clone()).collect(),
+        boosted: weights
+            .iter()
+            .filter(|(_, v)| **v > 1.0)
+            .map(|(k, _)| k.clone())
+            .collect(),
+        suppressed: weights
+            .iter()
+            .filter(|(_, v)| **v < 1.0)
+            .map(|(k, _)| k.clone())
+            .collect(),
     })
 }

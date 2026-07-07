@@ -18,7 +18,8 @@ const DEFAULT_MODEL: &str = "deepseek-chat";
 const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
 const MIN_CLIPS: usize = 6;
 
-const SYSTEM: &str = "You are the performance analyst for a faceless YouTube Shorts factory. You are given \
+const SYSTEM: &str =
+    "You are the performance analyst for a faceless YouTube Shorts factory. You are given \
 aggregated clip performance (virality score 0-100, views, by creator / hook style / \
 length / format) AND hook drop-off by style (% of viewers gone by the end of the hook — \
 the single sharpest signal of whether a hook is working). Do NOT restate the numbers. \
@@ -36,7 +37,12 @@ fn rollup_lines(name: &str, rs: &[Rollup], key_label: &str) -> String {
     let parts: Vec<String> = rs
         .iter()
         .take(5)
-        .map(|r| format!("{} score={:.0} views={} n={}", r.key, r.avg_score, r.avg_views as i64, r.n))
+        .map(|r| {
+            format!(
+                "{} score={:.0} views={} n={}",
+                r.key, r.avg_score, r.avg_views as i64, r.n
+            )
+        })
         .collect();
     // key_label kept for parity with Python's per-table key column; unused in the joined line.
     let _ = key_label;
@@ -57,11 +63,16 @@ fn retention_line(scored: &[crate::scoring::Scored]) -> String {
     if acc.is_empty() {
         return "Hook drop-off: (no retention data yet)".to_string();
     }
-    let mut means: Vec<(String, f64)> =
-        acc.into_iter().map(|(k, (sum, n))| (k, sum / n as f64)).collect();
+    let mut means: Vec<(String, f64)> = acc
+        .into_iter()
+        .map(|(k, (sum, n))| (k, sum / n as f64))
+        .collect();
     means.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     let body: Vec<String> = means.iter().map(|(k, v)| format!("{k} {v:.0}%")).collect();
-    format!("Hook drop-off by style (lower=better, % gone by hook's end): {}", body.join(" | "))
+    format!(
+        "Hook drop-off by style (lower=better, % gone by hook's end): {}",
+        body.join(" | ")
+    )
 }
 
 fn facts(a: &Analysis) -> String {
@@ -104,7 +115,10 @@ pub fn diagnose(root: &Path, settings: &serde_yaml::Value, a: &Analysis) -> Opti
         return None;
     }
     let v: serde_json::Value = resp.json().ok()?;
-    let text = v["choices"][0]["message"]["content"].as_str()?.trim().to_string();
+    let text = v["choices"][0]["message"]["content"]
+        .as_str()?
+        .trim()
+        .to_string();
     if text.is_empty() {
         None
     } else {

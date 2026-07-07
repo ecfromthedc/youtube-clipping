@@ -62,11 +62,19 @@ pub struct SourceCreator {
 }
 
 fn na_int(v: &str) -> Option<i64> {
-    if v == "NA" || v.is_empty() { None } else { v.parse().ok() }
+    if v == "NA" || v.is_empty() {
+        None
+    } else {
+        v.parse().ok()
+    }
 }
 
 fn na_float(v: &str) -> Option<f64> {
-    if v == "NA" || v.is_empty() { None } else { v.parse().ok() }
+    if v == "NA" || v.is_empty() {
+        None
+    } else {
+        v.parse().ok()
+    }
 }
 
 /// Parse `yt-dlp --print META_FORMAT` output into raw entries. Pure (mirrors `_parse_meta_lines`).
@@ -85,7 +93,11 @@ pub fn parse_meta_lines(stdout: &str) -> Vec<RawEntry> {
             id: parts[0].to_string(),
             view_count: na_int(parts[1]),
             timestamp: na_float(parts[2]),
-            channel_id: if parts[3] == "NA" { None } else { Some(parts[3].to_string()) },
+            channel_id: if parts[3] == "NA" {
+                None
+            } else {
+                Some(parts[3].to_string())
+            },
             title: parts[4].to_string(),
         });
     }
@@ -97,7 +109,10 @@ pub fn parse_meta_lines(stdout: &str) -> Vec<RawEntry> {
 fn iso_from_epoch(ts: f64) -> String {
     let secs = ts.trunc() as i64;
     let nanos = ((ts - secs as f64) * 1e9).round() as u32;
-    let dt = Utc.timestamp_opt(secs, nanos).single().unwrap_or_else(|| Utc.timestamp_opt(secs, 0).unwrap());
+    let dt = Utc
+        .timestamp_opt(secs, nanos)
+        .single()
+        .unwrap_or_else(|| Utc.timestamp_opt(secs, 0).unwrap());
     if nanos == 0 {
         dt.to_rfc3339_opts(SecondsFormat::Secs, false)
     } else {
@@ -107,7 +122,12 @@ fn iso_from_epoch(ts: f64) -> String {
 }
 
 /// Normalize raw entries → candidate rows with view_velocity. Pure (mirrors `parse_entries`).
-pub fn parse_entries(raw: &[RawEntry], creator: &str, lane: &str, now_epoch: f64) -> Vec<SourceRow> {
+pub fn parse_entries(
+    raw: &[RawEntry],
+    creator: &str,
+    lane: &str,
+    now_epoch: f64,
+) -> Vec<SourceRow> {
     let mut out = Vec::new();
     for e in raw {
         if e.id.is_empty() {
@@ -117,7 +137,10 @@ pub fn parse_entries(raw: &[RawEntry], creator: &str, lane: &str, now_epoch: f64
         let (velocity, published) = match e.timestamp {
             Some(ts) => {
                 let hours = ((now_epoch - ts) / 3600.0).max(1.0);
-                (crate::util::round_to(views as f64 / hours, 1), Some(iso_from_epoch(ts)))
+                (
+                    crate::util::round_to(views as f64 / hours, 1),
+                    Some(iso_from_epoch(ts)),
+                )
             }
             None => (views as f64, None), // recency-ordered proxy when no timestamp
         };
@@ -140,9 +163,17 @@ pub fn parse_entries(raw: &[RawEntry], creator: &str, lane: &str, now_epoch: f64
 
 /// Filter by min_views, then sort by view_velocity desc (stable). Pure (mirrors `rank`).
 pub fn rank(candidates: &[SourceRow], min_views: i64) -> Vec<SourceRow> {
-    let mut keep: Vec<SourceRow> = candidates.iter().filter(|c| c.views >= min_views).cloned().collect();
+    let mut keep: Vec<SourceRow> = candidates
+        .iter()
+        .filter(|c| c.views >= min_views)
+        .cloned()
+        .collect();
     // Python `sorted(..., reverse=True)` is stable; b.cmp(a) keeps equal-velocity order.
-    keep.sort_by(|a, b| b.view_velocity.partial_cmp(&a.view_velocity).unwrap_or(std::cmp::Ordering::Equal));
+    keep.sort_by(|a, b| {
+        b.view_velocity
+            .partial_cmp(&a.view_velocity)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     keep
 }
 
@@ -159,24 +190,59 @@ pub fn load_creators(root: &Path, niches_path: Option<&Path>) -> Result<Vec<Sour
     let text = std::fs::read_to_string(path)?;
     let data: serde_yaml::Value = serde_yaml::from_str(&text)?;
     let mut creators = Vec::new();
-    let niches = data.get("niches").and_then(|n| n.as_sequence()).cloned().unwrap_or_default();
+    let niches = data
+        .get("niches")
+        .and_then(|n| n.as_sequence())
+        .cloned()
+        .unwrap_or_default();
     for niche in &niches {
-        let niche_name = niche.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let lane_default =
-            niche.get("lane_default").and_then(|v| v.as_str()).unwrap_or("owned").to_string();
-        let list = niche.get("creators").and_then(|c| c.as_sequence()).cloned().unwrap_or_default();
+        let niche_name = niche
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let lane_default = niche
+            .get("lane_default")
+            .and_then(|v| v.as_str())
+            .unwrap_or("owned")
+            .to_string();
+        let list = niche
+            .get("creators")
+            .and_then(|c| c.as_sequence())
+            .cloned()
+            .unwrap_or_default();
         for c in &list {
-            let name = c.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let handle = c.get("handle").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let name = c
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let handle = c
+                .get("handle")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let url = if handle.starts_with("http") {
                 handle.clone()
             } else {
                 format!("https://www.youtube.com/{handle}/videos")
             };
-            let lane =
-                c.get("lane").and_then(|v| v.as_str()).map(String::from).unwrap_or_else(|| lane_default.clone());
-            let has_captions = c.get("has_captions").and_then(|v| v.as_bool()).unwrap_or(false);
-            creators.push(SourceCreator { name, url, lane, niche: niche_name.clone(), has_captions });
+            let lane = c
+                .get("lane")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| lane_default.clone());
+            let has_captions = c
+                .get("has_captions")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            creators.push(SourceCreator {
+                name,
+                url,
+                lane,
+                niche: niche_name.clone(),
+                has_captions,
+            });
         }
     }
     Ok(creators)
@@ -188,13 +254,21 @@ pub fn load_creators(root: &Path, niches_path: Option<&Path>) -> Result<Vec<Sour
 fn ytdlp_flat_ids(channel_url: &str, limit: i64) -> Result<Vec<String>> {
     let out = Command::new("yt-dlp")
         .args([
-            "--flat-playlist", "--no-warnings", "--print", "%(id)s",
-            "--playlist-items", &format!("1-{limit}"), channel_url,
+            "--flat-playlist",
+            "--no-warnings",
+            "--print",
+            "%(id)s",
+            "--playlist-items",
+            &format!("1-{limit}"),
+            channel_url,
         ])
         .output()?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        bail!("yt-dlp flat enumerate failed for {channel_url}: {}", &err.trim()[..err.trim().len().min(300)]);
+        bail!(
+            "yt-dlp flat enumerate failed for {channel_url}: {}",
+            &err.trim()[..err.trim().len().min(300)]
+        );
     }
     Ok(String::from_utf8_lossy(&out.stdout)
         .lines()
@@ -209,8 +283,10 @@ fn ytdlp_meta(video_ids: &[String]) -> Result<Vec<RawEntry>> {
     if video_ids.is_empty() {
         return Ok(Vec::new());
     }
-    let urls: Vec<String> =
-        video_ids.iter().map(|v| format!("https://www.youtube.com/watch?v={v}")).collect();
+    let urls: Vec<String> = video_ids
+        .iter()
+        .map(|v| format!("https://www.youtube.com/watch?v={v}"))
+        .collect();
     let out = Command::new("yt-dlp")
         .args(["--no-warnings", "--print", META_FORMAT])
         .args(&urls)
@@ -218,7 +294,10 @@ fn ytdlp_meta(video_ids: &[String]) -> Result<Vec<RawEntry>> {
     let rows = parse_meta_lines(&String::from_utf8_lossy(&out.stdout));
     if rows.is_empty() && !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        bail!("yt-dlp meta fetch failed: {}", &err.trim()[..err.trim().len().min(300)]);
+        bail!(
+            "yt-dlp meta fetch failed: {}",
+            &err.trim()[..err.trim().len().min(300)]
+        );
     }
     Ok(rows)
 }
@@ -267,10 +346,15 @@ pub fn run(root: &Path, niches_path: Option<&Path>) -> Result<Vec<SourceRow>> {
         }
     }
     if !dropped.is_empty() {
-        println!("  ⚠ avoid-list gate dropped {}: {}", dropped.len(), dropped.join(", "));
+        println!(
+            "  ⚠ avoid-list gate dropped {}: {}",
+            dropped.len(),
+            dropped.join(", ")
+        );
     }
 
-    let workers = (cfg["concurrency"].as_i64().unwrap_or(8) as usize).clamp(1, creators.len().max(1));
+    let workers =
+        (cfg["concurrency"].as_i64().unwrap_or(8) as usize).clamp(1, creators.len().max(1));
     let mut rows: Vec<SourceRow> = Vec::new();
     for chunk in creators.chunks(workers) {
         let results: Vec<(String, Result<Vec<SourceRow>>)> = std::thread::scope(|s| {
@@ -278,7 +362,10 @@ pub fn run(root: &Path, niches_path: Option<&Path>) -> Result<Vec<SourceRow>> {
                 .iter()
                 .map(|c| s.spawn(|| (c.name.clone(), source_creator(c, &cfg))))
                 .collect();
-            handles.into_iter().map(|h| h.join().expect("source thread panicked")).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("source thread panicked"))
+                .collect()
         });
         for (name, res) in results {
             match res {
@@ -319,7 +406,8 @@ fn to_db_row(r: &SourceRow) -> db::SourceVideoRow {
 /// Render the daily queue as markdown (mirrors `render_queue_md`). Pure.
 pub fn render_queue_md(queue: &[SourceRow]) -> String {
     if queue.is_empty() {
-        return "# Daily Source Queue\n\n_(empty — check creator handles in niches.yaml)_\n".to_string();
+        return "# Daily Source Queue\n\n_(empty — check creator handles in niches.yaml)_\n"
+            .to_string();
     }
     let mut lines = vec![
         "# Daily Source Queue".to_string(),
@@ -329,9 +417,19 @@ pub fn render_queue_md(queue: &[SourceRow]) -> String {
     ];
     for r in queue {
         // {view_velocity:,.0f}
-        let vel = crate::util::comma(format!("{:.0}", r.view_velocity).parse::<i64>().unwrap_or(0));
-        let title: String =
-            r.title.clone().unwrap_or_default().chars().take(60).collect::<String>().replace('|', "/");
+        let vel = crate::util::comma(
+            format!("{:.0}", r.view_velocity)
+                .parse::<i64>()
+                .unwrap_or(0),
+        );
+        let title: String = r
+            .title
+            .clone()
+            .unwrap_or_default()
+            .chars()
+            .take(60)
+            .collect::<String>()
+            .replace('|', "/");
         lines.push(format!(
             "| {} | {} | {} | {} | {} | {} |",
             vel,
@@ -356,13 +454,16 @@ mod tests {
                       short\tline\n";
         let rows = parse_meta_lines(stdout);
         assert_eq!(rows.len(), 2); // the 2-field line is dropped
-        assert_eq!(rows[0], RawEntry {
-            id: "abc".into(),
-            view_count: Some(1000),
-            timestamp: Some(1_700_000_000.0),
-            channel_id: Some("UCxyz".into()),
-            title: "hello world".into(),
-        });
+        assert_eq!(
+            rows[0],
+            RawEntry {
+                id: "abc".into(),
+                view_count: Some(1000),
+                timestamp: Some(1_700_000_000.0),
+                channel_id: Some("UCxyz".into()),
+                title: "hello world".into(),
+            }
+        );
         // NA → None; title keeps its embedded tabs (split at most 5 fields).
         assert_eq!(rows[1].view_count, None);
         assert_eq!(rows[1].timestamp, None);
@@ -383,7 +484,10 @@ mod tests {
         let now = 1_700_000_000.0 + 10.0 * 3600.0;
         let rows = parse_entries(&raw, "Creator", "owned", now);
         assert_eq!(rows[0].view_velocity, 3600.0);
-        assert_eq!(rows[0].published_at.as_deref(), Some("2023-11-14T22:13:20+00:00"));
+        assert_eq!(
+            rows[0].published_at.as_deref(),
+            Some("2023-11-14T22:13:20+00:00")
+        );
         assert_eq!(rows[0].url, "https://www.youtube.com/watch?v=v1");
     }
 
@@ -404,11 +508,24 @@ mod tests {
     #[test]
     fn rank_filters_min_views_and_sorts_desc_stable() {
         let mk = |id: &str, views: i64, vel: f64| SourceRow {
-            video_id: id.into(), creator: "c".into(), channel_id: None, title: Some("t".into()),
-            url: "u".into(), views, published_at: None, view_velocity: vel, lane: "owned".into(),
-            niche: None, has_captions: false,
+            video_id: id.into(),
+            creator: "c".into(),
+            channel_id: None,
+            title: Some("t".into()),
+            url: "u".into(),
+            views,
+            published_at: None,
+            view_velocity: vel,
+            lane: "owned".into(),
+            niche: None,
+            has_captions: false,
         };
-        let cands = vec![mk("lo", 100, 9.0), mk("a", 60_000, 5.0), mk("b", 70_000, 9.0), mk("c", 80_000, 9.0)];
+        let cands = vec![
+            mk("lo", 100, 9.0),
+            mk("a", 60_000, 5.0),
+            mk("b", 70_000, 9.0),
+            mk("c", 80_000, 9.0),
+        ];
         let ranked = rank(&cands, 50_000);
         // "lo" dropped by min_views; ties (b,c at 9.0) keep input order; a last.
         let ids: Vec<&str> = ranked.iter().map(|r| r.video_id.as_str()).collect();
@@ -419,9 +536,16 @@ mod tests {
     fn render_queue_md_empty_and_rows() {
         assert!(render_queue_md(&[]).contains("_(empty"));
         let row = SourceRow {
-            video_id: "v".into(), creator: "Jubilee".into(), channel_id: None,
-            title: Some("a | piped | title".into()), url: "http://x".into(), views: 51725,
-            published_at: None, view_velocity: 51724.6, lane: "owned".into(), niche: None,
+            video_id: "v".into(),
+            creator: "Jubilee".into(),
+            channel_id: None,
+            title: Some("a | piped | title".into()),
+            url: "http://x".into(),
+            views: 51725,
+            published_at: None,
+            view_velocity: 51724.6,
+            lane: "owned".into(),
+            niche: None,
             has_captions: false,
         };
         let md = render_queue_md(&[row]);

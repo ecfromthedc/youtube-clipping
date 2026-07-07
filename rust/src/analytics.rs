@@ -53,7 +53,10 @@ fn write_cache(root: &Path, key: &str, data: &Value) {
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
     }
-    let _ = std::fs::write(&path, serde_json::to_string_pretty(&full).unwrap_or_default());
+    let _ = std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&full).unwrap_or_default(),
+    );
 }
 
 fn now_secs() -> f64 {
@@ -90,14 +93,24 @@ pub fn channel_rollup(root: &Path, days: u32) -> Result<Value> {
 
     // Single batched query for views/watchMinutes/subsGained/estimatedRevenue.
     let totals = capture::yt_report(
-        &client, &token, &start, &end,
+        &client,
+        &token,
+        &start,
+        &end,
         "views,averagePercentageWatched,subscribersGained,estimatedRevenue,estimatedAdRevenue",
         "", // no dimension → totals row
         "",
     )
     .unwrap_or_else(|| json!({ "rows": [[0, 0, 0, 0, 0]] }));
-    let row = totals.get("rows").and_then(Value::as_array).and_then(|r| r.first());
-    let num = |i: usize| row.and_then(|r| r.get(i)).and_then(Value::as_f64).unwrap_or(0.0);
+    let row = totals
+        .get("rows")
+        .and_then(Value::as_array)
+        .and_then(|r| r.first());
+    let num = |i: usize| {
+        row.and_then(|r| r.get(i))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+    };
 
     let rollup = json!({
         "configured": true,
@@ -131,7 +144,10 @@ pub fn top_videos(root: &Path, days: u32, limit: usize) -> Result<Value> {
     let end = format!("{}", today);
 
     let rep = capture::yt_report(
-        &client, &token, &start, &end,
+        &client,
+        &token,
+        &start,
+        &end,
         "views,averagePercentageWatched,subscribersGained,estimatedRevenue",
         "video",
         "",
@@ -141,7 +157,11 @@ pub fn top_videos(root: &Path, days: u32, limit: usize) -> Result<Value> {
     let cols = rep
         .get("columnHeaders")
         .and_then(Value::as_array)
-        .map(|h| h.iter().map(|x| x["name"].as_str().unwrap_or("").to_string()).collect::<Vec<_>>())
+        .map(|h| {
+            h.iter()
+                .map(|x| x["name"].as_str().unwrap_or("").to_string())
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     let mut videos: Vec<Value> = rep
         .get("rows")
@@ -156,8 +176,17 @@ pub fn top_videos(root: &Path, days: u32, limit: usize) -> Result<Value> {
                         obj.insert(key, v.clone());
                     }
                     // health classification — green if avg watch > 70%
-                    let watch = obj.get("averagePercentageWatched").and_then(Value::as_f64).unwrap_or(0.0);
-                    let health = if watch >= 70.0 { "green" } else if watch >= 50.0 { "yellow" } else { "red" };
+                    let watch = obj
+                        .get("averagePercentageWatched")
+                        .and_then(Value::as_f64)
+                        .unwrap_or(0.0);
+                    let health = if watch >= 70.0 {
+                        "green"
+                    } else if watch >= 50.0 {
+                        "yellow"
+                    } else {
+                        "red"
+                    };
                     obj.insert("health".to_string(), json!(health));
                     Some(Value::Object(obj))
                 })
@@ -200,7 +229,10 @@ pub fn daily_series(root: &Path, days: u32) -> Result<Value> {
     let start = format!("{}", today - chrono::Duration::days(days as i64));
     let end = format!("{}", today);
     let rep = capture::yt_report(
-        &client, &token, &start, &end,
+        &client,
+        &token,
+        &start,
+        &end,
         "views,estimatedRevenue",
         "day",
         "",
@@ -212,7 +244,10 @@ pub fn daily_series(root: &Path, days: u32) -> Result<Value> {
     let mut revenue = Vec::new();
     if let Some(rows) = rep.get("rows").and_then(Value::as_array) {
         for r in rows {
-            let arr = match r.as_array() { Some(a) => a, None => continue };
+            let arr = match r.as_array() {
+                Some(a) => a,
+                None => continue,
+            };
             dates.push(arr.first().cloned().unwrap_or(json!("")));
             views.push(arr.get(1).and_then(Value::as_i64).unwrap_or(0));
             revenue.push(arr.get(2).and_then(Value::as_f64).unwrap_or(0.0));
@@ -234,10 +269,7 @@ pub fn retention_curve(root: &Path, vid: &str) -> Result<Value> {
     let start = format!("{}", today - chrono::Duration::days(28));
     let end = format!("{}", today);
     let curve = capture::fetch_retention(&client, &token, vid, &start, &end).unwrap_or_default();
-    let points: Vec<Value> = curve
-        .iter()
-        .map(|(t, w)| json!([t, w]))
-        .collect();
+    let points: Vec<Value> = curve.iter().map(|(t, w)| json!([t, w])).collect();
     let signals = capture::analyze_retention(&curve);
     Ok(json!({
         "configured": true,
@@ -267,7 +299,9 @@ pub fn recommendations(root: &Path) -> Result<Value> {
     }
     let conn = match rusqlite::Connection::open(&db_path) {
         Ok(c) => c,
-        Err(_) => return Ok(json!({ "configured": true, "ready": false, "note": "DB unreadable" })),
+        Err(_) => {
+            return Ok(json!({ "configured": true, "ready": false, "note": "DB unreadable" }))
+        }
     };
     use crate::db;
     let clips = db::clips_with_latest_metrics(&conn).unwrap_or_default();
@@ -311,14 +345,23 @@ pub fn recommendations(root: &Path) -> Result<Value> {
         Some((fmt, avg_views)) if *avg_views > 0.0 => {
             let mut other_avg = 0.0;
             if fmt_sorted.len() > 1 {
-                other_avg = fmt_sorted[1..].iter().map(|(_, v)| *v).sum::<f64>() / (fmt_sorted.len() - 1) as f64;
+                other_avg = fmt_sorted[1..].iter().map(|(_, v)| *v).sum::<f64>()
+                    / (fmt_sorted.len() - 1) as f64;
             }
-            let multiple = if other_avg > 0.0 { avg_views / other_avg } else { 0.0 };
+            let multiple = if other_avg > 0.0 {
+                avg_views / other_avg
+            } else {
+                0.0
+            };
             vec![format!(
                 "Your {} videos average {:.0} views each{} — make more of those.",
                 fmt,
                 avg_views,
-                if multiple > 1.2 { format!(" ({:.1}× the next-best format)", multiple) } else { String::new() }
+                if multiple > 1.2 {
+                    format!(" ({:.1}× the next-best format)", multiple)
+                } else {
+                    String::new()
+                }
             )]
         }
         _ => vec!["Not enough posted videos to compare formats yet.".to_string()],

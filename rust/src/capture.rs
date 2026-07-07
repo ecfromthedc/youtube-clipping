@@ -50,18 +50,27 @@ pub fn resolve_published(conn: &Connection, root: &Path) -> Result<i64> {
             "SELECT clip_id, post_id FROM clips WHERE status='posted' AND post_id IS NOT NULL \
              AND (post_url IS NULL OR post_url NOT LIKE '%youtube.com/watch%')",
         )?;
-        let v = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+        let v = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
         v
     };
     if pending.is_empty() {
         return Ok(0);
     }
     let settings = config::load_settings(root)?;
-    let api = settings["distribution"]["postiz"]["api_url"].as_str().unwrap_or("").trim_end_matches('/').to_string();
+    let api = settings["distribution"]["postiz"]["api_url"]
+        .as_str()
+        .unwrap_or("")
+        .trim_end_matches('/')
+        .to_string();
     let today = chrono::Utc::now().date_naive();
     let start = format!("{}T00:00:00Z", today - ChronoDuration::days(10));
     let end = format!("{}T00:00:00Z", today + ChronoDuration::days(2));
-    let client = match reqwest::blocking::Client::builder().timeout(Duration::from_secs(30)).build() {
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+    {
         Ok(c) => c,
         Err(_) => return Ok(0),
     };
@@ -91,12 +100,19 @@ pub fn resolve_published(conn: &Connection, root: &Path) -> Result<i64> {
         if p.get("state").and_then(Value::as_str) != Some("PUBLISHED") {
             continue;
         }
-        let url = match p.get("releaseURL").and_then(Value::as_str).filter(|u| !u.is_empty()) {
+        let url = match p
+            .get("releaseURL")
+            .and_then(Value::as_str)
+            .filter(|u| !u.is_empty())
+        {
             Some(u) => u,
             None => continue,
         };
         if let Some(id) = p.get("id").and_then(Value::as_str) {
-            let published = p.get("publishDate").and_then(Value::as_str).map(String::from);
+            let published = p
+                .get("publishDate")
+                .and_then(Value::as_str)
+                .map(String::from);
             info.insert(id.to_string(), (url.to_string(), published));
         }
     }
@@ -104,12 +120,19 @@ pub fn resolve_published(conn: &Connection, root: &Path) -> Result<i64> {
     for (clip_id, post_id) in pending {
         if let Some((url, published)) = info.get(&post_id) {
             // Python: published or db.now()
-            let posted_at = published.as_deref().filter(|s| !s.is_empty()).map(String::from).unwrap_or_else(db::now);
+            let posted_at = published
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .unwrap_or_else(db::now);
             db::set_clip_status(
                 conn,
                 &clip_id,
                 "posted",
-                &[("post_url", url.as_str()), ("posted_at", posted_at.as_str())],
+                &[
+                    ("post_url", url.as_str()),
+                    ("posted_at", posted_at.as_str()),
+                ],
             )?;
             n += 1;
         }
@@ -144,7 +167,9 @@ pub fn capture_public_with(
             "SELECT clip_id, post_url FROM clips WHERE status = 'posted' \
              AND post_url LIKE '%youtube.com/watch%'",
         )?;
-        let v = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<_>>()?;
+        let v = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
         v
     };
     let mut n = 0;
@@ -152,7 +177,14 @@ pub fn capture_public_with(
         match fetch(&post_url) {
             None => println!("  ! no views for {clip_id} ({post_url})"),
             Some(views) => {
-                db::insert_metric(conn, &MetricRow { clip_id, views, ..Default::default() })?;
+                db::insert_metric(
+                    conn,
+                    &MetricRow {
+                        clip_id,
+                        views,
+                        ..Default::default()
+                    },
+                )?;
                 n += 1;
             }
         }
@@ -172,13 +204,21 @@ pub struct RetentionSignals {
 
 pub fn analyze_retention(curve: &[(f64, f64)]) -> Option<RetentionSignals> {
     let mut pts: Vec<(f64, f64)> = curve.to_vec();
-    pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.partial_cmp(&b.1).unwrap()));
+    pts.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap()
+            .then(a.1.partial_cmp(&b.1).unwrap())
+    });
     if pts.len() < 3 {
         return None;
     }
     // hook_ret = last watch-ratio within the hook window, else the very first point.
-    let hook_ret =
-        pts.iter().filter(|(e, _)| *e <= HOOK_WINDOW).map(|(_, w)| *w).next_back().unwrap_or(pts[0].1);
+    let hook_ret = pts
+        .iter()
+        .filter(|(e, _)| *e <= HOOK_WINDOW)
+        .map(|(_, w)| *w)
+        .next_back()
+        .unwrap_or(pts[0].1);
     // biggest single drop; Python `max(..., key=drop)` keeps the FIRST on ties.
     let mut biggest_drop = pts[0].1 - pts[1].1;
     let mut at = pts[1].0;
@@ -205,7 +245,10 @@ pub fn yt_access_token(root: &Path) -> Option<String> {
     let cid = config::env_var(root, "YT_CLIENT_ID")?;
     let secret = config::env_var(root, "YT_CLIENT_SECRET")?;
     let refresh = config::env_var(root, "YT_REFRESH_TOKEN")?;
-    let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(30)).build().ok()?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .ok()?;
     let resp = client
         .post("https://oauth2.googleapis.com/token")
         .form(&[
@@ -219,7 +262,9 @@ pub fn yt_access_token(root: &Path) -> Option<String> {
         .error_for_status()
         .ok()?;
     let v: Value = resp.json().ok()?;
-    v.get("access_token").and_then(Value::as_str).map(String::from)
+    v.get("access_token")
+        .and_then(Value::as_str)
+        .map(String::from)
 }
 
 pub fn yt_report(
@@ -293,13 +338,17 @@ pub fn capture_full_analytics(conn: &Connection, root: &Path) -> Result<i64> {
             "SELECT clip_id, post_url, posted_at FROM clips WHERE status='posted' \
              AND post_url LIKE '%youtube.com/watch%'",
         )?;
-        let v = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+        let v = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<rusqlite::Result<_>>()?;
         v
     };
     if rows.is_empty() {
         return Ok(0);
     }
-    let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(30)).build()?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?;
     let today = util::today_iso();
     let mut n = 0;
     for (clip_id, post_url, posted_at) in rows {
@@ -307,7 +356,11 @@ pub fn capture_full_analytics(conn: &Connection, root: &Path) -> Result<i64> {
             Some(v) => v,
             None => continue,
         };
-        let start_owned = posted_at.as_deref().filter(|s| !s.is_empty()).unwrap_or(&today).to_string();
+        let start_owned = posted_at
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&today)
+            .to_string();
         let start = &start_owned[..start_owned.len().min(10)]; // [:10]
         let report = match yt_report(
             &client,
@@ -326,7 +379,9 @@ pub fn capture_full_analytics(conn: &Connection, root: &Path) -> Result<i64> {
             _ => continue, // no owned data yet — don't overwrite the public snapshot with zeros
         };
         let row = &srows[0]; // [video, views, avgViewPct, estRevenue]
-        let ret = analyze_retention(&fetch_retention(&client, &token, &vid, start, &today).unwrap_or_default());
+        let ret = analyze_retention(
+            &fetch_retention(&client, &token, &vid, start, &today).unwrap_or_default(),
+        );
         db::insert_metric(
             conn,
             &MetricRow {
@@ -346,7 +401,8 @@ pub fn capture_full_analytics(conn: &Connection, root: &Path) -> Result<i64> {
 /// A numeric cell from an analytics row (the API may send numbers as strings).
 fn num_at(row: &Value, i: usize) -> Option<f64> {
     let cell = row.get(i)?;
-    cell.as_f64().or_else(|| cell.as_str().and_then(|s| s.parse().ok()))
+    cell.as_f64()
+        .or_else(|| cell.as_str().and_then(|s| s.parse().ok()))
 }
 
 #[cfg(test)]
@@ -370,7 +426,10 @@ mod tests {
 
     #[test]
     fn video_id_extracts_watch_param() {
-        assert_eq!(video_id(Some("https://www.youtube.com/watch?v=abc123&t=5")).as_deref(), Some("abc123"));
+        assert_eq!(
+            video_id(Some("https://www.youtube.com/watch?v=abc123&t=5")).as_deref(),
+            Some("abc123")
+        );
         assert_eq!(video_id(Some("https://tiktok.com/@x/video/1")), None);
         assert_eq!(video_id(None), None);
     }
@@ -403,7 +462,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(views, 4321);
-        let c2: i64 = conn.query_row("SELECT COUNT(*) FROM metrics WHERE clip_id='c2'", [], |r| r.get(0)).unwrap();
+        let c2: i64 = conn
+            .query_row("SELECT COUNT(*) FROM metrics WHERE clip_id='c2'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
         assert_eq!(c2, 0); // no URL → never captured
     }
 

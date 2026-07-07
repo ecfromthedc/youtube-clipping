@@ -60,6 +60,7 @@ const AVOID_TITLE_TERMS: &[&str] = &[
 
 /// A sourcing candidate (mirrors the Python dict keys creator_allowed/filter_creators read).
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // ported for parity; wired when sourcing cuts over
 pub struct Creator {
     pub name: String,
     pub url: String,
@@ -103,6 +104,7 @@ pub fn source_allowed(title: &str) -> (bool, String) {
 }
 
 /// Split creators into (allowed, dropped-names) by the avoid-list. Pure.
+#[allow(dead_code)] // ported for parity; wired when sourcing cuts over
 pub fn filter_creators(creators: &[Creator]) -> (Vec<Creator>, Vec<String>) {
     let mut allowed = Vec::new();
     let mut dropped = Vec::new();

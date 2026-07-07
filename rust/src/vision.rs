@@ -61,25 +61,44 @@ pub fn parse_moments(raw: &serde_json::Value) -> Vec<Moment> {
                 continue;
             }
             let score = num_field(&m["score"]).unwrap_or(0.5).clamp(0.0, 1.0);
-            let reason: String =
-                m["reason"].as_str().unwrap_or("").chars().take(200).collect();
-            out.push(Moment { start: round_to(s, 2), end: round_to(e, 2), score, reason });
+            let reason: String = m["reason"]
+                .as_str()
+                .unwrap_or("")
+                .chars()
+                .take(200)
+                .collect();
+            out.push(Moment {
+                start: round_to(s, 2),
+                end: round_to(e, 2),
+                score,
+                reason,
+            });
         }
     }
     // Stable sort by score descending (Python `sorted(..., reverse=True)` is stable).
-    out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     out
 }
 
 /// float(x) tolerant of JSON number-or-numeric-string (mirrors Python `float(m["..."])`).
 fn num_field(v: &serde_json::Value) -> Option<f64> {
-    v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
 }
 
 /// Gemini picks the N most clippable windows. Returns [] when disabled/unavailable (caller
 /// falls back to the transcript heuristic). See the module ceiling note: the live Files-API
 /// upload path is not ported (no native client); [] keeps autopilot's no-creds path at parity.
-pub fn rank_moments(root: &Path, _video: &Path, _n: usize, settings: &serde_yaml::Value) -> Vec<Moment> {
+pub fn rank_moments(
+    root: &Path,
+    _video: &Path,
+    _n: usize,
+    settings: &serde_yaml::Value,
+) -> Vec<Moment> {
     if !enabled(root, settings) {
         return Vec::new();
     }
