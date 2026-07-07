@@ -104,3 +104,13 @@ download paths; **publishing** (`/api/postiz/publish`) is behind the SHARED-POST
 the top of this file — integration id only, never by state. The in-page copilot (✨ bead, Ctrl+/)
 drives the same surfaces from inside the UI and its capabilities are drift-tested too
 (`rust/src/actions.rs`).
+
+## Live deployment (tidestiller.risingtidesviral.com)
+
+The live server runs a **deploy copy** at `~/Projects/active/tidestiller-live` (NOT the repo):
+unsigned binaries under `~/Documents` dyld-hang on macOS TCC in cron/launchd contexts, so the
+runtime lives outside it. **After any server or UI change: `./rust/scripts/deploy-live.sh`**
+(builds, syncs binary+dist+config+.env+oauth, bounces the service). A cron keepalive
+(`~/Desktop/automations/tidestiller-keepalive.sh`, every minute) self-heals crashes and brings
+it up after reboots. Editor project data lives in the deploy dir (ephemeral by design); the
+repo's `data/` stays the pipeline's.
