@@ -155,6 +155,7 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/channels/:id/queue", get(channel_queue))
         .route("/api/library", get(library_list))
         .route("/api/library/assign", post(library_assign))
+        .route("/api/library/delete", post(library_delete))
         // LLM proxy for Page Agent — injects the server-side DeepSeek key so the
         // browser agent can drive the editor without the key landing in client JS.
         .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
@@ -1420,6 +1421,42 @@ async fn library_assign(
         find_channel(&s.root, &b.channel).map_err(AppError)?; // must be a connected channel
         std::fs::write(&sidecar, &b.channel).map_err(|e| AppError(anyhow!("sidecar: {e}")))?;
     }
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct DeleteRenderBody {
+    project: String,
+    kind: String,
+    file: String,
+}
+
+/// Delete a render you don't want to push through — removes the mp4 + its
+/// sidecars (.title / .channel / .publish.json). Local file only; anything
+/// already published on a channel stays published (this is not a takedown).
+async fn library_delete(
+    State(s): State<AppState>,
+    Json(b): Json<DeleteRenderBody>,
+) -> Result<Json<Value>, AppError> {
+    if !LIBRARY_KINDS.contains(&b.kind.as_str()) {
+        return Err(AppError(anyhow!("bad kind")));
+    }
+    if b.project.contains(['/', '.']) || b.file.contains('/') || b.file.contains("..") {
+        return Err(AppError(anyhow!("bad path")));
+    }
+    let abs = project_dir(&s.root, &b.project).join(&b.kind).join(&b.file);
+    if !abs.exists() {
+        return Err(AppError(anyhow!("render not found")));
+    }
+    std::fs::remove_file(&abs).map_err(|e| AppError(anyhow!("delete: {e}")))?;
+    for sidecar in [
+        format!("{}.title", abs.display()),
+        format!("{}.channel", abs.display()),
+        abs.with_extension("publish.json").display().to_string(),
+    ] {
+        let _ = std::fs::remove_file(&sidecar);
+    }
+    println!("  🗑 deleted render {}/{}/{}", b.project, b.kind, b.file);
     Ok(Json(json!({ "ok": true })))
 }
 

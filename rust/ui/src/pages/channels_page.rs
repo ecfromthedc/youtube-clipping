@@ -119,6 +119,13 @@ struct MapReq {
 }
 
 #[derive(Serialize)]
+struct DeleteReq {
+    project: String,
+    kind: String,
+    file: String,
+}
+
+#[derive(Serialize)]
 struct SlotsReq {
     times: Vec<String>,
 }
@@ -559,6 +566,8 @@ fn library_row(
     };
     let assign_item = item.clone();
     let sched_item = item.clone();
+    let delete_item = item.clone();
+    let delete_label = label.clone();
     let row_key_for_pick = row_key.clone();
 
     view! {
@@ -597,6 +606,44 @@ fn library_row(
                         }
                     >
                         {if in_folder { "✕ unfile" } else { "📁 file here" }}
+                    </button>
+                    <button
+                        class="btn btn-ghost btn-sm"
+                        title="Delete this render (local file — not a takedown)"
+                        on:click=move |_| {
+                            let confirmed = web_sys::window()
+                                .map(|w| {
+                                    w.confirm_with_message(
+                                            &format!(
+                                                "Delete \"{delete_label}\"?\n\nThe render file is removed for \
+                                                 good (anything already published stays published).",
+                                            ),
+                                        )
+                                        .unwrap_or(false)
+                                })
+                                .unwrap_or(false);
+                            if !confirmed {
+                                return;
+                            }
+                            let body = DeleteReq {
+                                project: delete_item.project.clone(),
+                                kind: delete_item.kind.clone(),
+                                file: delete_item.file.clone(),
+                            };
+                            spawn_local(async move {
+                                match post_json::<DeleteReq, OkResp>("/api/library/delete", &body)
+                                    .await
+                                {
+                                    Ok(_) => {
+                                        status.set("🗑 deleted".into());
+                                        reload();
+                                    }
+                                    Err(e) => status.set(format!("⚠ delete: {e}")),
+                                }
+                            });
+                        }
+                    >
+                        "🗑"
                     </button>
                     {(in_folder && mapped.is_some())
                         .then(|| {
