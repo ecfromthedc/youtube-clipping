@@ -126,6 +126,28 @@ The **format is the path**; these five steps are how an agent *walks it and impr
 > fold DOAC's debate moments into Hot Seat + the reveals into Money Fights, or **(c)** bench it
 > until Channels 1–2 clear their gate. Until you decide, it stays 🪑 ON DECK (not launched).
 
+## Channel 6 — "AI Frontier" · the AI arms-race story, clipped  🟢 LAUNCHING (pivot)
+*Identity: the single most shocking/contrarian AI moment from the biggest names, isolated.*
+*(Replaces the old workflow-heavy "Identic Builder News" with a clip-first format.)*
+
+- **`niches.yaml` group:** `ai-frontier`  ·  **clip queue + ranked moments:** `AI-NEWS-SOURCING.md`
+- **Clip from (LOW risk, lead here):** `@TheDiaryOfACEO` (AI eps — Hinton/Bengio/Mo Gawdat/
+  Yampolskiy/Galloway; their titles are pre-tested hooks) · `@DwarkeshPatel` (Dario/Ilya/Karpathy) ·
+  `@lexfridman` + Lex Clips · `@ycombinator` (Karpathy) · `@ThePrimeTimeagen` + `@t3dotgg` (dev angle).
+  **MED (transform hard, <25s):** `@TED`. **HIGH (avoid bulk):** 60 Minutes/CBS, Guardian, ABC, Fireship.
+- **The format (your path):** cold-open *on the claim* → the shocking line as bold on-screen text in
+  frame 1 (lands on mute) → the speaker delivering it → **end on the stakes + "are they right? 👇".**
+  Borrowed authority is the whole game: the doom/job-loss claim comes from the MD/PhD/CEO, never us.
+- **Hook:** a number + a year + the threat ("99% of jobs gone by 2030"). The single most shocking line, first frame.
+- **The arc / programming:** builders-are-scared (Dario/Hinton/Bengio/Hassabis) → your-job-is-next
+  (jobs apocalypse) → the-timeline (AGI dates) → **plant a foil** (LeCun "they're all wrong") to farm
+  the comment war → the dev angle (is coding dead?). Mix doom with a contrarian foil deliberately.
+- **Guardrails:** transform every clip (cut + hook + captions or defer to theirs — RULE #1, never two
+  caption tracks) · no JRE / avoid-list · prefer LOW Content-ID sources, transform MED hard. Claims are
+  the *speaker's* (borrowed authority) — present "X said," don't assert it as our fact.
+- **Optimize on → comment-rate + shares** (doom/debate is comment-driven, like Hot Seat); watch-through
+  as the retention check. Greenlight also if comment-rate >2× baseline at modest views.
+
 ---
 
 ## How this maps to the rest of the repo

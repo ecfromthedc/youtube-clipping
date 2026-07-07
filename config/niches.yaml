@@ -184,3 +184,122 @@ niches:
         handle: "@drgabriellelyon"
         lane: owned
         notes: "ROS 45.0 WHITESPACE — 'muscle = organ of longevity'; women's-health/longevity lane open."
+      # ── Discipline spice + interview firehose (Eric's north-stars) ──
+      # NOTE: David Goggins / Joe Rogan have NO clippable OWN channel (Goggins = IG + podcast-guest;
+      # JRE = Spotify-audio + Content-ID heavy). The discipline/big-name vein surfaces via the
+      # interview feeds below (Modern Wisdom interviews Goggins-types). Don't add a @davidgoggins
+      # handle — it 404s; re-upload/motivation channels are someone else's clips (ineligible).
+      - name: "Modern Wisdom"
+        handle: "@ChrisWillx"
+        lane: owned
+        notes: "Chris Williamson INTERVIEWS all of the above (Huberman/Attia/Goggins-adjacent) — one feed, many experts = high clip yield. Verify has_captions (clips burn captions)."
+      # ── EXPANSION veins — weight up as the channel warms ──
+      - name: "Rich Roll"
+        handle: "@richroll"
+        lane: owned
+        notes: "EXPANSION (transformation/endurance/midlife mindset). Long-form interviews; plant-based + discipline."
+      - name: "Wim Hof"
+        handle: "@wimhofmethod"
+        lane: owned
+        notes: "EXPANSION (breath/cold/recovery). 'Reset your nervous system' — strong hook, niche but loyal."
+
+  # ── Channel 6 · AI Frontier — the AI arms-race story, clipped (faceless AI-news) ──
+  # The pivot from "Identic Builder News" (workflow-heavy) to clipping. Identity: the single
+  # most shocking/contrarian AI moment from the biggest names, isolated. Paints the arms-race
+  # narrative — builders' doom odds, job-apocalypse predictions, AGI timelines, founder drama,
+  # plus deliberate contrarian foils (LeCun) to farm the comment war. Clip queue + ranked
+  # moments live in AI-NEWS-SOURCING.md. ⚠ verify has_captions per source on a rendered frame
+  # (clip channels often burn their own captions → set has_captions: true to defer, RULE #1).
+  - name: ai-frontier
+    lane_default: owned
+    creators:
+      # ── LOW Content-ID risk — lead with these ──
+      - name: "Diary of a CEO"
+        handle: "@TheDiaryOfACEO"
+        lane: owned
+        notes: "ROS 86.5 — #1 OVERALL + clip-friendly. AI eps are a firehose: Hinton, Bengio, Mo Gawdat, Yampolskiy, Scott Galloway. Pre-tested doom/jobs hooks in their own titles. Full eps on YouTube."
+      - name: "Dwarkesh Patel"
+        handle: "@DwarkeshPatel"
+        lane: owned
+        notes: "Independent, clip-tolerant, lowest risk. Long-form with Dario, Ilya, Karpathy. Dense bold-claim moments ('country of geniuses', 'pre-training is over')."
+      - name: "Lex Fridman"
+        handle: "@lexfridman"
+        lane: owned
+        notes: "Clip-friendly (official @LexClips cuts self-contained segments). Dario, Demis, Primeagen, LeCun. No music. ⚠ JRE is the banned one, NOT Lex."
+      - name: "Y Combinator"
+        handle: "@ycombinator"
+        lane: owned
+        notes: "Karpathy 'Software Is Changing (Again)' — clean conference audio, no music, widely clipped. Low risk."
+      - name: "ThePrimeagen"
+        handle: "@ThePrimeTimeagen"
+        lane: owned
+        notes: "Dev-audience hot takes on AI replacing programmers / vibe-coding. Official highlights channel = clip-tolerant. ⚠ reaction segments can carry the reacted source's Content-ID — clip windows where it's just him talking."
+      - name: "Theo (t3.gg)"
+        handle: "@t3dotgg"
+        lane: owned
+        notes: "Lowest-risk dev creator. Talking-head, cross-posts everywhere. 'We all fell for it' / 'vibe coding is for seniors' — spicy contrarian, debate-pairable."
+      # ── DIFFUSION — branch OUT from the seed voices: the independent AI-commentary layer +
+      # founder pods that interview the same people. Talking-head / no-music / clip-tolerant, so
+      # they widen the net beyond the named roster without raising Content-ID risk. Sourcing
+      # resolves handles live and skips any that 404, so a stale handle just drops out.
+      - name: "Matthew Berman"
+        handle: "@matthew_berman"
+        lane: owned
+        notes: "DIFFUSION. Daily AI-news talking-head; reacts to the same Altman/Dario/OpenAI beats with his own framing. No music, fully clip-tolerant."
+      - name: "Wes Roth"
+        handle: "@WesRoth"
+        lane: owned
+        notes: "DIFFUSION. AI-news commentary on the frontier-lab drama; punchy bold-claim hooks. Talking-head, low risk."
+      - name: "AI Explained"
+        handle: "@aiexplained-official"
+        lane: owned
+        notes: "DIFFUSION. Measured, high-credibility analysis of new models/papers — quotable 'the benchmark everyone missed' moments. No music."
+      - name: "bycloud"
+        handle: "@bycloudAI"
+        lane: owned
+        notes: "DIFFUSION. Research-explainer voice (younger/dev audience); surfaces the names your roster doesn't cover. Talking-head."
+      - name: "No Priors"
+        handle: "@NoPriorsPod"
+        lane: owned
+        notes: "DIFFUSION. Sarah Guo + Elad Gil (on the roster) interview founders/researchers — same orbit, fresh guests. Clip-tolerant, minimal music."
+      - name: "BG2 Pod"
+        handle: "@bg2pod"
+        lane: owned
+        notes: "DIFFUSION. Gurley + Gerstner on AI economics/capex; the Altman 'snaps on revenue' moment came from here. Bold finance-of-AI hooks."
+      - name: "Machine Learning Street Talk"
+        handle: "@MachineLearningStreetTalk"
+        lane: owned
+        notes: "DIFFUSION. Deep researcher interviews (the skeptic/contrarian end — good debate foils to your doomer clips). Talking-head, no music."
+      - name: "a16z"
+        handle: "@a16z"
+        lane: owned
+        notes: "DIFFUSION. Andreessen (roster) + a rotating founder bench; builder-optimist counterweight to the doom lane. Low risk."
+      # ── FOUNDERS & VCs — the core of the channel: founders + investors talking shop ──
+      - name: "All-In Podcast"
+        handle: "@allin"
+        lane: owned
+        notes: "FOUNDERS/VCs. Chamath, Sacks, Friedberg, Calacanis — the biggest VC pod. Hot takes on markets/AI/politics; pre-tested debate hooks."
+      - name: "Twenty Minute VC"
+        handle: "@20VC"
+        lane: owned
+        notes: "FOUNDERS/VCs. Harry Stebbings interviews top founders + VCs. Dense investing/operating bold-claims, clip-tolerant."
+      - name: "This Week in Startups"
+        handle: "@thisweekin"
+        lane: owned
+        notes: "FOUNDERS/VCs. Jason Calacanis + guests on building/funding startups. Talking-head, high clip yield."
+      - name: "Acquired"
+        handle: "@AcquiredFM"
+        lane: owned
+        notes: "FOUNDERS/VCs. Deep company/founder stories (Nvidia, OpenAI). Quotable 'how they actually won' moments."
+      - name: "My First Million"
+        handle: "@MyFirstMillionPod"
+        lane: owned
+        notes: "FOUNDERS/VCs. Shaan + Sam on business ideas/founder playbooks. Punchy money hooks, clip-friendly."
+      # ── MEDIUM Content-ID risk — use for the strongest quotes, transform HARD, keep <25s ──
+      - name: "TED"
+        handle: "@TED"
+        lane: owned
+        notes: "MED risk (active Content-ID). Tristan Harris, Bengio, Vlad Tenev 'AI is coming for your job'. Highest-polish but transform hard + short excerpts only."
+      # ── HIGH Content-ID risk — DO NOT bulk-source; only re-source a quote here if it exists nowhere safer ──
+      # 60 Minutes / CBS, The Guardian, ABC News, Fireship (continuous music bed) = aggressive Content-ID.
+      # Prefer the same quote from a low-risk channel above. Details + per-moment flags in AI-NEWS-SOURCING.md.

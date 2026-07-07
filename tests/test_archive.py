@@ -20,7 +20,7 @@ def test_archive_to_local_dir_copies_clip_and_sidecar(tmp_path, monkeypatch):
     out = archive.archive_clip(clip, {"clip_id": "c1", "channel": "phoenix-protocol", "hook": "h"})
     assert out is not None
     assert (dest / "phoenix-protocol" / "c1.mp4").read_bytes() == b"video-bytes"
-    assert (dest / "phoenix-protocol" / "c1.json").exists()   # metadata sidecar archived too
+    assert (dest / "phoenix-protocol" / "meta" / "c1.json").exists()   # sidecar in meta/ subfolder
 
 
 def test_archive_off_returns_none(tmp_path, monkeypatch):
@@ -41,8 +41,9 @@ def test_prune_local_removes_only_posted(tmp_path, monkeypatch):
         db.insert_clip({"clip_id": cid, "channel": "c", "platform": "youtube", "lane": "owned",
                         "fmt": "x", "hook_type": "q", "length_sec": 30, "status": status}, dbp)
         (clips / f"{cid}.mp4").write_bytes(b"v")
-        (clips / f"{cid}.json").write_text("{}")
+        (clips / "meta").mkdir(exist_ok=True)
+        (clips / "meta" / f"{cid}.json").write_text("{}")
     removed = archive.prune_local(dbp)
-    assert removed == 2                                   # p1.mp4 + p1.json
+    assert removed == 2                                   # p1.mp4 + meta/p1.json
     assert not (clips / "p1.mp4").exists()
     assert (clips / "q1.mp4").exists()                    # un-posted clip kept (still needs to post)

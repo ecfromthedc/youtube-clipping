@@ -12,6 +12,8 @@ dependencies = [
     "pillow>=10",
     "google-genai>=1.0",
     "opencv-python-headless>=4.9",
+    "yt-dlp>=2026.6.9",
+    "rich>=13",
 ]
 
 [project.optional-dependencies]

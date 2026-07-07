@@ -16,6 +16,17 @@ echo "→ creating venv…"
 echo "→ installing dev tooling + package (non-editable)…"
 uv pip install pytest ruff           # dev tools
 uv pip install . --reinstall-package youtube-clipping   # copy ycp into site-packages
+uv pip install -U yt-dlp             # keep the downloader fresh — a stale yt-dlp silently hangs on YouTube
+
+echo "→ fetching face models (YuNet detect + SFace identity-lock; OpenCV's own, ~40MB)…"
+mkdir -p assets/models
+_fetch_model() {  # url, dest — idempotent
+  [ -f "$2" ] || curl -fsSL -o "$2" "$1" || echo "  ! model fetch failed: $2 (reframe falls back to Haar)"
+}
+_fetch_model "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx" \
+  "assets/models/face_detection_yunet_2023mar.onnx"
+_fetch_model "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx" \
+  "assets/models/face_recognition_sface_2021dec.onnx"
 
 echo "→ installing git hooks (commit-hygiene guard for concurrent agents)…"
 git config core.hooksPath .githooks

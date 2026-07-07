@@ -37,5 +37,44 @@ a shared account; match the integration first.** Our `distribute` already scopes
 channels; the gap was a manual cleanup script. Any cleanup must take an integration id and refuse
 to touch others. The team's other accounts run independently — we never touch them.
 
+## 2026-06-26 — AI Frontier channel pivot + clip-sourcing rules
+
+**Source selection makes or breaks `ycp clip` when Gemini is OFF.** Cutting 5+ AI-news samples
+(Channel 6 "AI Frontier") with **no `GEMINI_API_KEY`** in `.env`, so the moment-picker falls back
+to the transcript heuristic. The heuristic + face-tracker reliably nail **single-speaker** sources
+(solo talking-head, keynote/stage talk) — any window lands on the right person saying on-topic
+words (Karpathy YC, Theo solo, LeCun Lex clip, Tenev TED all came out clean). They **fail** on:
+(1) **two-person interviews** — grabs the *interviewer's setup question* and the face-pan locks
+onto the host, not the guest (Altman/Lex, Primeagen/Lex both missed); (2) **screen-share / B-roll**
+windows — clips a chart or cutaway, no speaker (Primeagen survey graphic); (3) **DOAC-style
+produced cold-open teaser montages** — fast B-roll + host narration in the first ~3 min, so a
+from-zero `--window` grabs the montage, not the interview (Hinton/DOAC missed). → **Rules until
+Gemini is wired:** prefer single-speaker sources; for interviews, either add `GEMINI_API_KEY` (the
+real fix — vision picks the guest's actual payoff window) or pass an explicit known timestamp; never
+`--window N` a podcast whose intro is a montage. Also: a hand-written `--title` rides on top of
+*whatever* window the heuristic picked, so verify hook-matches-payoff on a rendered frame.
+
+**Two caption pitfalls (RULE #1).** (a) Re-uploads/clip-channels that **burn their own captions**
+(the Axios Dario clip, DOAC re-cuts) → stacking ours = double track; pass `--no-captions` (set
+`has_captions: true` in `niches.yaml`) to defer — the hook still renders. (b) Already-**vertical /
+picture-in-picture** clip-channel shorts (a Lex *Clips* PiP cam) reframe terribly — the face-pan
+locks onto the tiny inset and the rest is empty wall. Source the original 16:9 long-form instead.
+*Lesson (again): eyeball a real frame — wrong speaker, double captions, and B-roll all pass the
+"clip produced ✓" check silently.*
+
+**Gemini picks WHEN, not WHO — 2-cam interviews still framed on the host.** Wired
+`GEMINI_API_KEY` and added `--start MIN` (download a slice from an offset, not just the first N —
+so we can reach the gold deep in a 90–140 min interview past the cold-open montage; `_section()`
+is unit-tested). With both, Gemini reliably picks a good *moment* and it improved selection (the
+Hinton/DOAC clip now opens on Hinton, not the host). BUT on **two-camera podcasts (Dwarkesh)** the
+editor cuts between host and guest, and our center/face reframe crops to whoever dominates the
+window — frequently the interviewer asking the setup question (Ilya/Dario/Dwarkesh clips came out
+framed on *Dwarkesh*). Gemini chooses the timestamp; it does not control which face gets cropped.
+→ **Until a speaker-aware reframe exists** (crop to the *named guest* specifically — the real next
+feature for interview sources), clip interviews only from **guest-dominant** uploads / official
+clip channels that stay on the guest, or accept host-framed misses. Single-speaker sources (solo
+creators, keynote/stage talks, guest-dominant clips) remain the reliable lane — the 5 shipped AI
+Frontier samples are all that shape.
+
 **Team rule:** every fix, optimization, and learning ships to GitHub so all agents/teammates
 inherit it. Update `STATUS.md` (current state) + this file (the why) on anything non-obvious.

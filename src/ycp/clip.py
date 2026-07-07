@@ -15,7 +15,9 @@ Pure logic (`plan_clips`, `score_candidate`) is unit-tested; the subprocess step
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
+import signal
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -123,14 +125,50 @@ def _vision_candidates(video: Path, segments: list[Segment], max_clips: int) -> 
 
 # -- subprocess steps (thin wrappers) -----------------------------------------
 
-def download(url: str, workdir: Path, window_sec: int | None = None) -> Path:
+def _run_bounded(cmd: list[str], timeout: int, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """Like subprocess.run(capture_output=True, text=True, timeout=), but on timeout kills the
+    WHOLE process group — not just the direct child. yt-dlp's --download-sections spawns ffmpeg;
+    a plain timeout kills yt-dlp yet then blocks forever draining the pipe the orphaned ffmpeg
+    still holds (the ~12h hang we hit live). New session + killpg makes the timeout actually
+    terminate the whole tree. Raises subprocess.TimeoutExpired on timeout (caller treats as a
+    failed step and moves on)."""
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          cwd=cwd, start_new_session=True) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)   # kill yt-dlp AND its ffmpeg child
+            out, err = proc.communicate()                     # tree is dead → pipes close, no hang
+            raise subprocess.TimeoutExpired(cmd, timeout, output=out, stderr=err) from None
+        return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
+def _section(start_sec: int, window_sec: int | None) -> str:
+    """yt-dlp --download-sections value. Pure + tested. `*START-END`, or `*START-inf` to the
+    end when no window is given. The gold in a 90-min interview is deep in the episode, so we
+    must be able to start past the cold-open montage, not only grab the first N seconds."""
+    end = f"{start_sec + window_sec}" if window_sec else "inf"
+    return f"*{start_sec}-{end}"
+
+
+def download(url: str, workdir: Path, window_sec: int | None = None,
+             start_sec: int = 0) -> Path:
     out = workdir / "source.mp4"
-    cmd = ["yt-dlp", "-f", "mp4/best", "-o", str(out)]
-    if window_sec:
-        # Bound long sources (podcasts): grab only the first window_sec seconds.
-        cmd += ["--download-sections", f"*0-{int(window_sec)}", "--force-keyframes-at-cuts"]
+    # `mp4/best` grabs YouTube's *progressive* single-file mp4 — capped at 360p/720p — so every
+    # clip starts life upscaled. Ask for the best separate video+audio (DASH, up to 1080p) and
+    # merge to mp4: real source resolution → no pixelation from upscaling a low-res start.
+    cmd = ["yt-dlp",
+           "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best",
+           "--merge-output-format", "mp4", "-o", str(out)]
+    if window_sec or start_sec:
+        # Bound long sources (podcasts): grab [start_sec, start_sec+window_sec]. The downloaded
+        # file starts at ~0, so transcript/vision/cut timestamps stay chunk-relative downstream.
+        cmd += ["--download-sections", _section(start_sec, window_sec), "--force-keyframes-at-cuts"]
     cmd.append(url)
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    try:
+        proc = _run_bounded(cmd, timeout=900)   # group-kill on timeout — plain run() deadlocks here
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"download timed out (>900s) for {url} — skipped") from None
     if out.exists():
         return out
     cands = list(workdir.glob("source*.mp4")) + list(workdir.glob("source*.mkv"))
@@ -142,26 +180,101 @@ def download(url: str, workdir: Path, window_sec: int | None = None) -> Path:
 # transcribe() now lives in transcribe.py (whisper.cpp default, openai-whisper fallback)
 
 
-def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path) -> Path:
+def cut_vertical(video: Path, cand: Candidate, out_path: Path, workdir: Path,
+                 segments: list[Segment] | None = None) -> Path:
     """Trim the candidate window, then reframe to a 9:16 vertical that follows the speaker
     (OpenCV face-pan, falling back to a center crop). Captions are composited afterward by
-    `captions.burn_captions` (this ffmpeg has no libass/freetype text filters)."""
+    `captions.burn_captions` (this ffmpeg has no libass/freetype text filters).
+
+    When `segments` (the full transcript) is supplied, the window is sliced + shifted to clip-local
+    time and handed to reframe so face-tracking can lock onto the ACTIVE SPEAKER (mouth-motion vs
+    speech), not just the most-present face. Optional — omit it for the prior most-present behavior."""
     trimmed = workdir / "trim.mp4"
     cmd = ["ffmpeg", "-y", "-i", str(video), "-ss", str(cand.start), "-t", str(cand.duration),
-           "-c:v", "libx264", "-c:a", "aac", "-preset", "veryfast", str(trimmed)]
+           "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-preset", "veryfast", str(trimmed)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, cwd=workdir)
     if proc.returncode != 0 or not trimmed.exists():
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()[-400:]}")
     mode = settings().get("reframe", {}).get("mode", "face")
-    return reframe.reframe(trimmed, out_path, workdir, mode=mode)
+    local_segs = slice_and_shift(segments, cand.start, cand.end) if segments else None
+    return reframe.reframe(trimmed, out_path, workdir, mode=mode, segments=local_segs)
+
+
+def _prefer_on_camera(video: Path, candidates: list[Candidate], keep: int,
+                      floor: float = 0.34) -> list[Candidate]:
+    """Keep the best `keep` candidates whose window actually shows an adequately-sized speaker
+    (face_coverage ≥ floor). Drops slide/chart/b-roll AND wide-tiny-speaker windows. Returns []
+    when NOTHING is well-framed — better to skip a source than ship a clip with no real subject.
+    Order preserves virality ranking; only poorly-framed windows are filtered out."""
+    if settings().get("reframe", {}).get("mode", "face") != "face":
+        return candidates[:keep]
+    good = [c for c in candidates if reframe.face_coverage(video, c.start, c.end) >= floor]
+    return good[:keep]
+
+
+def _extend_to_sentence(cand: Candidate, segments: list[Segment]) -> Candidate:
+    """If the clip currently ends MID-sentence, extend its end to the next sentence boundary
+    (so it doesn't cut off before the speaker finishes the point), capped at MAX_CLIP_SEC."""
+    prior = [s for s in segments if s.end <= cand.end + 0.3]
+    if prior and prior[-1].text.rstrip().endswith((".", "!", "?", '"', "…")):
+        return cand                                  # already ends on a complete thought
+    limit = cand.start + MAX_CLIP_SEC
+    new_end = cand.end
+    for s in segments:
+        if s.start < cand.end or s.start > limit:
+            if s.start > limit:
+                break
+            continue
+        new_end = min(s.end, limit)
+        if s.text.rstrip().endswith((".", "!", "?", '"', "…")):
+            break
+    if new_end > cand.end + 0.2:
+        return Candidate(cand.start, round(new_end, 2),
+                         _window_text(segments, cand.start, new_end), cand.score)
+    return cand
+
+
+def _trim_to_speaker(video: Path, cand: Candidate, segments: list[Segment]) -> Candidate:
+    """Advance the clip start to where the speaker first appears, so it never opens on a
+    speaker-less establishing/wide/slide shot. No-op if the speaker is already there or trimming
+    would push the clip under MIN_CLIP_SEC."""
+    if settings().get("reframe", {}).get("mode", "face") != "face":
+        return cand
+    # Require a CLOSE face (≥12% of width) so we skip the wide establishing shot — a tiny speaker
+    # on the edge is what let clips open on the room/wall. Look up to 6s in for the close-up cut.
+    ft = reframe.first_face_time(video, cand.start, cand.end, max_skip=6.0, min_face_frac=0.12)
+    if ft - cand.start > 0.3 and cand.end - ft >= MIN_CLIP_SEC:
+        return Candidate(round(ft, 2), cand.end, _window_text(segments, ft, cand.end), cand.score)
+    return cand
+
+
+def _already_produced(vid_hash: str, channel: str, creator: str,
+                      title: str | None, db_path: Path | None) -> bool:
+    """True if this clip already exists — by source+moment id (files in any clips/ subfolder)
+    or by creator+title in the DB. Stops the pipeline from regenerating clips already produced
+    (incl. ones the operator already reviewed/used)."""
+    if list(CLIPS_DIR.glob(f"**/{vid_hash}-*.mp4")):
+        return True
+    if title:
+        from .db import connect
+        try:
+            with connect(db_path) as c:
+                row = c.execute(
+                    "SELECT 1 FROM clips WHERE channel=? AND source_creator=? AND post_title=? LIMIT 1",
+                    (channel, creator, title)).fetchone()
+            return row is not None
+        except Exception:  # noqa: BLE001  (dedup is best-effort; never block a cut on a db hiccup)
+            return False
+    return False
 
 
 def run(url: str, max_clips: int = 6, lane: str = "owned",
         source_creator: str = "unknown", channel: str = "clips",
         hook_cta: bool = True, title: str | None = None, cta: str = "Subscribe for more",
         gameplay: Path | None = None, source_video_id: str | None = None,
-        angle: str = "", window_sec: int | None = None, captions_on: bool = True,
-        db_path: Path | None = None) -> list[dict]:
+        angle: str = "", window_sec: int | None = None, start_sec: int = 0,
+        captions_on: bool = True, exact: tuple[float, float] | None = None,
+        force: bool = False, db_path: Path | None = None) -> list[dict]:
     """Full pipeline: url -> ranked vertical clips with hook title + captions, registered for QC.
 
     Every clip gets the DeepSeek hook title (the highest-leverage lever) and opus-style
@@ -175,16 +288,43 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
     """
     db.init_db(db_path)
     created: list[dict] = []
-    vid_hash = hashlib.sha1(url.encode()).hexdigest()[:8]
+    # REFINEMENT (exact) mode: re-cut a precise [in, out] of the source — no moment-pick, honour
+    # the bounds. Each refine gets a fresh id and bypasses the dedup (re-cutting is intentional).
+    if exact:
+        start_sec = int(exact[0])
+        window_sec = max(1, int(round(exact[1] - exact[0])))
+        vid_hash = hashlib.sha1(f"{url}@{exact}@{title}@{os.urandom(4).hex()}".encode()).hexdigest()[:8]
+    elif force:
+        # FORCE — a fresh cut even if we made one here before (unique id, no dedup gate).
+        vid_hash = hashlib.sha1(f"{url}@{start_sec}@{os.urandom(4).hex()}".encode()).hexdigest()[:8]
+    else:
+        # Include the start offset so two DIFFERENT moments cut from the SAME video get distinct
+        # ids (else clip_id collides and the second silently overwrites the first).
+        vid_hash = hashlib.sha1(f"{url}@{start_sec}".encode()).hexdigest()[:8]
+        # DEDUP — never remake a clip we already have.
+        if _already_produced(vid_hash, channel, source_creator, title, db_path):
+            print(f"  ⟳ skip — already produced: {source_creator} “{title or '(auto-hook)'}”")
+            return []
     with tempfile.TemporaryDirectory(prefix="ycp-clip-") as tmp:
         workdir = Path(tmp)
-        video = download(url, workdir, window_sec=window_sec)
+        video = download(url, workdir, window_sec=window_sec, start_sec=start_sec)
         segments = transcribe(video, workdir)
-        candidates = _vision_candidates(video, segments, max_clips)
-        if not candidates:  # vision off/unavailable, or every moment too short once clamped
-            # Cap the heuristic fallback at MAX_CLIP_SEC too — the vision path clamps to it, so the
-            # fallback must as well, else a 50-60s window slips through to QC.
-            candidates = plan_clips(segments, max_len=MAX_CLIP_SEC, top=max_clips)
+        if exact:
+            # The whole downloaded segment IS the clip — no moment-pick, no on-camera gate, no
+            # trim/extend. The operator (refinement request) defined these exact bounds.
+            dur = captions._probe_duration(video) or float(window_sec or 0)
+            candidates = [Candidate(0.0, round(dur, 2), _window_text(segments, 0.0, dur), 1.0)]
+        else:
+            # Over-generate candidates, then prefer windows where the SPEAKER is on camera — a
+            # talk that cut to a full-screen slide (or b-roll) has no face to follow and reframes
+            # to the slide. Gate added 2026-06-27 after a Karpathy clip sat on a slide.
+            n_pick = max(max_clips, 6)
+            candidates = _vision_candidates(video, segments, n_pick)
+            if not candidates:  # vision off/unavailable, or every moment too short once clamped
+                candidates = plan_clips(segments, max_len=MAX_CLIP_SEC, top=n_pick)
+            candidates = _prefer_on_camera(video, candidates, max_clips)
+            candidates = [_trim_to_speaker(video, c, segments) for c in candidates]
+            candidates = [_extend_to_sentence(c, segments) for c in candidates]
         from . import optimize
         prefer = optimize.preferred_hooks()  # hook styles the loop has learned are winning
         ab = settings().get("ab", {})
@@ -198,7 +338,7 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
                       if captions_on else [])
             staged = workdir / f"{clip_id}.mp4"
             try:
-                cut_vertical(video, cand, staged, workdir)
+                cut_vertical(video, cand, staged, workdir, segments=segments)
             except (RuntimeError, FileNotFoundError) as exc:
                 print(f"  ! skip {clip_id}: {exc}")
                 continue
@@ -228,7 +368,18 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
                     print(f"  · captions failed ({exc}); shipping plain clip")
                 if gameplay:
                     cur = enhance.stack_gameplay(cur, gameplay, workdir / f"{variant_id}_gp.mp4")
-                out = CLIPS_DIR / f"{variant_id}.mp4"
+                # ---- hardened QC gate: Gemini reviews the FINISHED clip and routes it ----
+                # usable → unreviewed/ (for human review); not usable → unusable/ (auto-reject,
+                # so charts/wide-tiny/cut-off clips never reach the human queue). Fails OPEN
+                # (usable) when Gemini is unavailable, so it can't silently swallow everything.
+                # THE GATE: Gemini visually signs off on the WHOLE clip (contact sheet of every ~3s)
+                # before it can reach the human pile. FAILS CLOSED — no explicit pass ⇒ unusable.
+                # Runs on every clip including refinements; an empty-room/wall opening is junk either
+                # way. This is the hard rule: nothing hits unreviewed/ without a visual sign-off.
+                review = vision.gate(cur)
+                usable = review.get("usable", False)   # fail closed — no explicit pass ⇒ rejected
+                status = "pending_qc" if usable else "rejected"
+                out = CLIPS_DIR / ("unreviewed" if usable else "unusable") / f"{variant_id}.mp4"
                 out.parent.mkdir(parents=True, exist_ok=True)
                 # Copy (not move) when the hook burn fell back to `staged`, so the shared base
                 # survives for the other variants in this A/B set.
@@ -236,14 +387,22 @@ def run(url: str, max_clips: int = 6, lane: str = "owned",
                     shutil.copy2(str(staged), str(out))
                 else:
                     shutil.move(str(cur), str(out))
+                if review.get("reviewed") and not usable:
+                    print(f"  ✗ QC rejected → unusable/ [{review.get('subject','?')}] "
+                          f"{'; '.join(review.get('issues', [])[:3])}")
                 db.insert_clip({
                     "clip_id": variant_id, "source_video_id": source_video_id,
                     "source_creator": source_creator, "channel": channel,
                     "platform": "youtube", "lane": lane, "fmt": "auto-clip",
                     "hook_type": hook["type"], "length_sec": int(cand.duration),
-                    "score": float(cand.score), "status": "pending_qc", "post_title": hook["text"],
+                    "score": float(cand.score), "status": status, "post_title": hook["text"],
                     "experiment_id": exp_id, "variant": hook["type"] if exp_id else None,
                     "post_url": str(out),  # local preview path until posted
+                    # provenance: the EXACT source + absolute in/out, so refinement ops can re-cut
+                    # this same moment (download offset + the picked window within it).
+                    "source_url": url,
+                    "clip_start": round(float(start_sec) + cand.start, 2),
+                    "clip_end": round(float(start_sec) + cand.end, 2),
                 }, db_path)
                 created.append({"clip_id": variant_id, "file": str(out),
                                 "score": cand.score, "len": cand.duration,

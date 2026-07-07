@@ -82,3 +82,27 @@ def test_cut_vertical_produces_1080x1920(tmp_path: Path):
         capture_output=True, text=True, check=True,
     ).stdout.strip()
     assert dims == "1080,1920"  # reframed to 9:16
+
+
+def test_section_builder():
+    """_section: start offset + window → yt-dlp section string; no window → to end."""
+    from ycp.clip import _section
+    assert _section(0, 30) == "*0-30"
+    assert _section(2520, 480) == "*2520-3000"   # --start 42 --window 8 (minutes→sec)
+    assert _section(600, None) == "*600-inf"
+    assert _section(0, None) == "*0-inf"
+
+
+def test_run_bounded_returns_output_on_success():
+    r = clip._run_bounded(["sh", "-c", "printf hi"], timeout=10)
+    assert r.returncode == 0 and r.stdout == "hi"
+
+
+def test_run_bounded_kills_whole_tree_on_timeout():
+    """The download hang was subprocess.run(timeout=) blocking on a pipe held by yt-dlp's orphaned
+    ffmpeg child. _run_bounded must return PROMPTLY on timeout (group-kill), not wait out the child."""
+    import time
+    t0 = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        clip._run_bounded(["sh", "-c", "sleep 30"], timeout=1)
+    assert time.monotonic() - t0 < 15   # didn't deadlock on the child's pipe

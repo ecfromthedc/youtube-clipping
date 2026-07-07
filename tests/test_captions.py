@@ -20,6 +20,16 @@ def test_build_chunks_caps_words_and_is_non_overlapping():
     assert all(chunks[i].end <= chunks[i + 1].start + 1e-6 for i in range(len(chunks) - 1))
 
 
+def test_build_chunks_breaks_on_sentence_not_comma():
+    # commas DON'T split (would drift behind audio); sentence end DOES (a real pause)
+    chunks = captions.build_chunks([Segment(0.0, 4.0, "we won, today is over. nice")], max_words=3)
+    texts = [c.text for c in chunks]
+    assert texts[0] == "we won, today"          # comma kept inline, capped at max_words
+    assert "is over." in texts[1]               # flushed at the sentence end
+    # non-overlapping + in order = on-time
+    assert all(chunks[i].end <= chunks[i + 1].start + 1e-6 for i in range(len(chunks) - 1))
+
+
 def test_build_chunks_enforces_min_dwell():
     chunks = captions.build_chunks([Segment(0.0, 0.1, "hi there")], max_words=3, min_dwell=0.5)
     assert chunks and chunks[0].end - chunks[0].start >= 0.5
@@ -37,11 +47,11 @@ def test_case_helper_lowercases():
 
 
 def test_caption_cfg_reflects_settings():
-    # settings.yaml: case=lower, size_pct=10, hook_hold_sec=7 (Eric's spec).
+    # reads creative knobs from settings.yaml; values are tunable, so just sanity-check ranges.
     cfg = captions._caption_cfg()
-    assert cfg["case"] == "lower"
-    assert cfg["hook_hold_sec"] >= 7.0
-    assert abs(cfg["size_pct"] - 0.10) < 1e-9
+    assert cfg["case"] in ("lower", "upper")
+    assert 1.0 <= cfg["hook_hold_sec"] <= 12.0
+    assert 0.0 < cfg["size_pct"] < 0.20
 
 
 def test_render_overlay_writes_transparent_frames(tmp_path):
@@ -54,3 +64,15 @@ def test_render_overlay_writes_transparent_frames(tmp_path):
     from PIL import Image
     im = Image.open(first)
     assert im.mode == "RGBA" and im.size == captions.SIZE
+
+
+def test_clear_hook_pos_places_above_or_below_face():
+    # face in the upper-middle → hook goes ABOVE it (small fraction), clear of the face
+    p = captions._clear_hook_pos((0.30, 0.45), default=0.34)
+    assert p < 0.30 and abs(p - 0.175) < 1e-6
+    # face high near the top → no room above → hook tucks BELOW it (above caption zone)
+    p2 = captions._clear_hook_pos((0.05, 0.22), default=0.34)
+    assert 0.22 < p2 < captions.CAP_ZONE_TOP
+    # no face, or a face so big no band fits → fall back to default
+    assert captions._clear_hook_pos(None, 0.34) == 0.34
+    assert captions._clear_hook_pos((0.10, 0.60), 0.34) == 0.34

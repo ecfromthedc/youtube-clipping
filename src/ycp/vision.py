@@ -14,25 +14,55 @@ hooks.py / transcribe.py). qc_screen() is an optional visual-compliance pass tha
 from __future__ import annotations
 
 import json
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from .config import env, settings
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 
-_MOMENT_PROMPT = """You are an expert short-form editor for faceless YouTube/TikTok clip channels.
+_MOMENT_PROMPT = """You are an expert short-form editor for a TALKING-HEAD clip channel.
 Watch this video and pick the {n} BEST standalone moments to cut as vertical Shorts.
 
-A great moment: hooks in the first 1-2 seconds, has a clear payoff or emotional/visual peak, is
-quotable, and stands alone without prior context. Prefer TIGHT 20-35s windows (the retention sweet
-spot — cut to the punch, no runway); never exceed 38s. Avoid intros, ad reads, dead air, and
-anything that needs setup.
+CRITICAL — the on-camera subject MUST be a PERSON (a speaker / talking head). For the WHOLE window
+you choose, a person must be clearly on screen as the main subject. REJECT and never pick windows
+that are slides, charts, graphs, screen-shares, code, diagrams, title cards, product shots, logos,
+or any b-roll where no person is the focus. A clip with no person on camera is unusable to us — if
+a great quote happens over a slide, pick a nearby window where the speaker is actually shown talking.
+
+A great moment also: hooks in the first 1-2 seconds, has a clear payoff or emotional/visual peak, is
+quotable, and stands alone. Prefer TIGHT 20-35s windows (the retention sweet spot); never exceed 38s.
+Avoid intros, ad reads, dead air, and anything that needs setup.
 
 Return ONLY JSON:
 {{"moments":[{{"start_sec": <number>, "end_sec": <number>, "score": <0-1 how viral>,
+"person_on_camera": <true|false — is a person the on-camera subject for the WHOLE window?>,
 "reason": "<one line: why this clips>"}}]}}
-Best first. Timestamps are seconds from the start of THIS video."""
+Only include moments where person_on_camera is true. Best first. Timestamps are seconds from the
+start of THIS video."""
+
+_REVIEW_PROMPT = """You are a STRICT quality-control reviewer for a faceless TALKING-HEAD clip
+channel. Watch this FINISHED vertical Short and decide if it is USABLE to post. Be harsh — when in
+doubt, reject. A clip is UNUSABLE if ANY of these is true:
+- SUBJECT IS NOT A PERSON: the shot is a slide, chart, graph, screen-share, code, diagram, title
+  card, product shot, logo, or b-roll for a meaningful part of the clip.
+- WIDE / TINY SPEAKER: the speaker is a small figure in a wide shot (e.g. a far stage shot) rather
+  than a head-and-shoulders / upper-body framing.
+- BAD FRAMING: the face is cut off, off to the edge, or the crop is centred on the background.
+- DOESN'T OPEN ON THE SPEAKER: the first ~1 second is an establishing/wide/title/slide shot, not
+  the person talking.
+- CUT OFF: the clip ends before the speaker finishes the key sentence/point (the thought is
+  incomplete or it stops mid-sentence).
+- WRONG SUBJECT: the framed person appears to be an interviewer/host reacting rather than the main
+  speaker delivering the point.
+
+Return ONLY JSON:
+{"usable": <bool>, "subject": "person"|"slide_or_chart"|"wide_tiny"|"b_roll"|"mixed",
+ "opens_on_speaker": <bool>, "complete_thought": <bool>, "well_framed": <bool>,
+ "issues": ["<short issue>", ...], "confidence": <0-1>}"""
 
 _QC_PROMPT = """You are a YouTube monetization compliance checker for a faceless clip channel.
 Watch this clip and flag anything that risks demonetization or a strike: copyrighted music,
@@ -95,6 +125,8 @@ def _parse_moments(raw) -> list[Moment]:
             continue
         if e <= s:
             continue
+        if m.get("person_on_camera") is False:   # Gemini says no person on screen → skip (charts/slides)
+            continue
         try:
             score = max(0.0, min(1.0, float(m.get("score", 0.5))))
         except (TypeError, ValueError):
@@ -128,6 +160,117 @@ def rank_moments(video_path, n: int = 6, model: str | None = None) -> list[Momen
         return moments[:n]
     except Exception:  # noqa: BLE001  (best-effort; caller falls back to the heuristic)
         return []
+
+
+def review_clip(video_path, model: str | None = None) -> dict:
+    """Strict QC of a FINISHED clip — Gemini watches the rendered Short and judges usability
+    (subject is a person, well framed, opens on the speaker, complete thought). Returns a dict
+    with 'usable' + the breakdown + 'issues'. Fails OPEN ({'usable': True, 'reviewed': False})
+    when Gemini is off/unavailable, so it never silently blocks when we can't actually check."""
+    if not enabled():
+        return {"usable": True, "reviewed": False, "issues": []}
+    try:
+        from google.genai import types
+        client = _client()
+        f = _upload_active(client, video_path)
+        if f is None:
+            return {"usable": True, "reviewed": False, "issues": []}
+        resp = client.models.generate_content(
+            model=model or _cfg().get("model", DEFAULT_MODEL),
+            contents=[f, _REVIEW_PROMPT],
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        data = json.loads(resp.text)
+        try:
+            client.files.delete(name=f.name)
+        except Exception:  # noqa: BLE001
+            pass
+        subject = str(data.get("subject", ""))
+        opens = bool(data.get("opens_on_speaker", False))
+        complete = bool(data.get("complete_thought", False))
+        framed = bool(data.get("well_framed", False))
+        # usable = subject is a person (or mostly-person) AND it opens on the speaker AND it's
+        # well framed. The framing gate is NON-NEGOTIABLE (2026-06-28): without it, a crop centred
+        # on the background/wall (the 16:9→9:16 pan missing the speaker) shipped as "usable" because
+        # well_framed was ignored — that's how empty-room clips reached the review pile. Cut-off /
+        # incomplete-thought stay WARNINGS (Gemini over-flags those), but bad framing now rejects.
+        usable = subject in ("person", "mixed") and opens and framed
+        warnings = list(data.get("issues") or [])
+        if not complete:
+            warnings.append("may cut off / incomplete thought")
+        if not framed:
+            warnings.append("framing could be tighter")
+        return {
+            "usable": usable, "reviewed": True, "subject": subject,
+            "opens_on_speaker": opens, "complete_thought": complete, "well_framed": framed,
+            "issues": [str(x) for x in warnings][:8],
+            "confidence": float(data.get("confidence", 0.0) or 0.0),
+        }
+    except Exception:  # noqa: BLE001
+        return {"usable": True, "reviewed": False, "issues": []}
+
+
+_GATE_PROMPT = """You are the FINAL visual gate for a faceless TALKING-HEAD short-form channel.
+This image is a CONTACT SHEET: frames sampled every ~3 seconds across ONE vertical clip, in order
+left-to-right, top-to-bottom. Ignore any fully black/blank cells at the end.
+
+PASS only if essentially EVERY non-blank frame shows a real PERSON, well framed as the clear subject
+(head-and-shoulders / upper body), actually on camera. REJECT the ENTIRE clip if ANY frame shows:
+- no person / an empty room, set, desk, chairs / a wall or background as the subject
+- a screen-share, code, terminal, slide, chart, graph, diagram, title card, logo, or b-roll
+- the speaker tiny/far in a wide shot
+- a face cut off, shoved to the edge, or the crop centred off the person
+The FIRST frame (top-left) MUST open on the person — if frame 1 is a wall / empty set, REJECT.
+
+Be strict: when in doubt, REJECT. Return ONLY JSON:
+{"usable": <bool>, "bad_frames": [<1-based indices>], "reason": "<short why>"}"""
+
+
+def _contact_sheet(video_path, out_dir, every: float = 2.5, cols: int = 4, rows: int = 4,
+                   cell_w: int = 360) -> Path | None:
+    """Tile frames into one contact-sheet PNG — the whole clip in one image. The select expr FORCES
+    the true first frame (t=0) into cell 1 (`isnan(prev_selected_t)`) then samples every `every`s, so
+    the all-important OPENING is always reviewed (a plain fps filter skips ~the first 1.5s — exactly
+    where empty-room openings hide). None on failure."""
+    sheet = Path(out_dir) / "sheet.png"
+    vf = (f"select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,{every})',"
+          f"scale={cell_w}:-1,tile={cols}x{rows}")
+    try:
+        subprocess.run(["ffmpeg", "-y", "-i", str(video_path), "-vf", vf, "-frames:v", "1",
+                        "-fps_mode", "passthrough", str(sheet)], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return sheet if sheet.exists() else None
+
+
+def gate(video_path, model: str | None = None) -> dict:
+    """THE gate: a video-capable model visually signs off on the WHOLE clip (a contact sheet of
+    every ~3s) before it can reach the review folder. FAILS CLOSED — vision off, contact-sheet
+    failure, model error, or anything short of an explicit approval ⇒ NOT usable. Nothing reaches
+    the human pile without a visual pass. Returns {usable, reviewed, reason, bad_frames}."""
+    if not enabled():
+        return {"usable": False, "reviewed": False, "reason": "vision gate off — fail closed",
+                "bad_frames": []}
+    with tempfile.TemporaryDirectory(prefix="ycp-gate-") as tmp:
+        sheet = _contact_sheet(video_path, tmp)
+        if sheet is None:
+            return {"usable": False, "reviewed": False, "reason": "contact sheet failed — fail closed",
+                    "bad_frames": []}
+        try:
+            from google.genai import types
+            client = _client()
+            resp = client.models.generate_content(
+                model=model or _cfg().get("model", DEFAULT_MODEL),
+                contents=[types.Part.from_bytes(data=sheet.read_bytes(), mime_type="image/png"),
+                          _GATE_PROMPT],
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            data = json.loads(resp.text)
+        except Exception as e:  # noqa: BLE001
+            return {"usable": False, "reviewed": False, "reason": f"gate error — fail closed: {e}",
+                    "bad_frames": []}
+    return {"usable": bool(data.get("usable", False)), "reviewed": True,
+            "reason": str(data.get("reason", "")), "bad_frames": list(data.get("bad_frames") or [])}
 
 
 def qc_screen(video_path, model: str | None = None) -> dict:

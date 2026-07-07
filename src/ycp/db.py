@@ -104,7 +104,9 @@ def connect(db_path: Path | None = None) -> Iterator[sqlite3.Connection]:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)  # idempotent CREATE IF NOT EXISTS - every connection has the schema
     # Lightweight idempotent migrations for columns added after a db already existed.
-    for col in ("post_title TEXT", "post_id TEXT", "experiment_id TEXT", "variant TEXT", "score REAL"):
+    for col in ("post_title TEXT", "post_id TEXT", "experiment_id TEXT", "variant TEXT", "score REAL",
+                # provenance — lets a clip be re-cut at its EXACT source + in/out (refinement ops)
+                "source_url TEXT", "clip_start REAL", "clip_end REAL"):
         try:
             conn.execute(f"ALTER TABLE clips ADD COLUMN {col}")
         except sqlite3.OperationalError:
@@ -146,17 +148,20 @@ def insert_clip(row: dict[str, Any], db_path: Path | None = None) -> None:
             """INSERT INTO clips
                  (clip_id, source_video_id, source_creator, channel, platform,
                   lane, fmt, hook_type, length_sec, score, status, post_title,
-                  experiment_id, variant, post_url, posted_at, slack_ts, created_at)
+                  experiment_id, variant, post_url, source_url, clip_start, clip_end,
+                  posted_at, slack_ts, created_at)
                VALUES (:clip_id, :source_video_id, :source_creator, :channel,
                        :platform, :lane, :fmt, :hook_type, :length_sec, :score,
                        COALESCE(:status,'pending_qc'), :post_title,
                        :experiment_id, :variant, :post_url,
+                       :source_url, :clip_start, :clip_end,
                        :posted_at, :slack_ts, :created_at)
                ON CONFLICT(clip_id) DO NOTHING""",
             {
                 "status": None, "source_video_id": None, "source_creator": None,
                 "post_title": None, "experiment_id": None, "variant": None,
                 "score": None, "post_url": None, "posted_at": None, "slack_ts": None,
+                "source_url": None, "clip_start": None, "clip_end": None,
                 "created_at": now(), **row,
             },
         )

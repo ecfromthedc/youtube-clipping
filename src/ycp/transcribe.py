@@ -11,6 +11,7 @@ runners are validated on a real machine (sandbox can't run whisper/ffmpeg).
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -90,11 +91,37 @@ def _run_openai(video: Path, workdir: Path) -> list[Segment]:
     return parse_srt(srt.read_text())
 
 
+# Whisper mishears AI proper nouns and the hook/captions parrot the broken word
+# ("entropic" → Anthropic). One correction on `segments` fixes both surfaces, since
+# hook and captions both derive from Segment.text. Longest keys first so multi-word
+# terms win over substrings; word-boundary + case-insensitive.
+_TERM_FIXES = {
+    "an entropic": "Anthropic", "entropic": "Anthropic",
+    "open ai": "OpenAI", "openai": "OpenAI",
+    "chat gpt": "ChatGPT", "chatgpt": "ChatGPT",
+    "deep seek": "DeepSeek", "deepseek": "DeepSeek",
+    "mid journey": "Midjourney", "midjourney": "Midjourney",
+    "hugging face": "Hugging Face",
+    "nvidia": "Nvidia", "perplexity": "Perplexity", "gemini": "Gemini",
+}
+_TERM_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(_TERM_FIXES, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE)
+
+
+def fix_terms(segments: list[Segment]) -> list[Segment]:
+    """Correct common Whisper mis-hearings of AI proper nouns. Pure, no I/O.
+    Rebuilds each Segment (frozen dataclass); timing preserved."""
+    def _fix(text: str) -> str:
+        return _TERM_RE.sub(lambda m: _TERM_FIXES[m.group(0).lower()], text)
+    return [Segment(s.start, s.end, _fix(s.text)) for s in segments]
+
+
 def transcribe(video: Path, workdir: Path) -> list[Segment]:
     """whisper.cpp if available (fast), else openai-whisper fallback."""
     binary = find_cpp_binary()
     if binary:
-        return _run_cpp(video, workdir, binary)
+        return fix_terms(_run_cpp(video, workdir, binary))
     print("  · whisper.cpp not found — using openai-whisper fallback "
           "(run scripts/setup-whisper.sh for 3–5× faster transcription)")
-    return _run_openai(video, workdir)
+    return fix_terms(_run_openai(video, workdir))

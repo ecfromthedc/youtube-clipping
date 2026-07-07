@@ -8,6 +8,7 @@
   ycp capture                   Stage 5: snapshot public views
   ycp brief                     Stage 5: generate the weekly brief (+ --post-slack)
   ycp clip <url>                Stage 2: hybrid yt-dlp+whisper+ffmpeg vertical clips
+  ycp clip <url> --from MM:SS --to MM:SS   operator-pointed exact cut (skips moment-picking)
   ycp scoreboard                Race to $15K — the gamified game state (+ --demo)
   ycp autopilot                 chain the daily loop end-to-end (+ --skip-source/--no-clip)
 """
@@ -23,6 +24,29 @@ from . import mock as mock_mod
 from . import scoreboard as scoreboard_mod
 from . import sourcing as sourcing_mod
 from .config import ROOT
+
+
+def _parse_ts(s: str) -> float:
+    """Absolute timestamp -> seconds. Accepts `MM:SS`, `HH:MM:SS`, or bare seconds ('90', '12.5')."""
+    s = str(s or "").strip()
+    if not s:
+        raise ValueError("empty timestamp")
+    if ":" in s:
+        parts = s.split(":")
+        if len(parts) not in (2, 3):
+            raise ValueError(f"bad timestamp {s!r} (expected MM:SS or HH:MM:SS)")
+        try:
+            nums = [float(p) for p in parts]
+        except ValueError:
+            raise ValueError(f"bad timestamp {s!r} (expected MM:SS or HH:MM:SS)") from None
+        secs = 0.0
+        for n in nums:
+            secs = secs * 60 + n
+        return secs
+    try:
+        return float(s)
+    except ValueError:
+        raise ValueError(f"bad timestamp {s!r} (expected MM:SS, HH:MM:SS, or seconds)") from None
 
 
 def _cmd_init(_: argparse.Namespace) -> int:
@@ -110,12 +134,36 @@ def _cmd_clip(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from . import clip as clip_mod
-    created = clip_mod.run(args.url, max_clips=args.max, lane=args.lane,
-                           source_creator=args.creator, channel=args.channel,
-                           hook_cta=args.hook_cta, title=args.title, cta=args.cta,
-                           gameplay=Path(args.gameplay) if args.gameplay else None,
-                           angle=args.angle, captions_on=not args.no_captions,
-                           window_sec=int(args.window * 60) if args.window else None)
+
+    common_kwargs = dict(
+        max_clips=args.max, lane=args.lane,
+        source_creator=args.creator, channel=args.channel,
+        hook_cta=args.hook_cta, title=args.title, cta=args.cta,
+        gameplay=Path(args.gameplay) if args.gameplay else None,
+        angle=args.angle, captions_on=not args.no_captions,
+    )
+
+    if args.from_ts is not None and args.to_ts is not None:
+        # Operator-pointed exact cut: skip moment-picking entirely, honour the exact bounds.
+        # (vision.gate() still runs afterward inside clip.run's exact= path.)
+        try:
+            from_sec = _parse_ts(args.from_ts)
+            to_sec = _parse_ts(args.to_ts)
+        except ValueError as e:
+            print(f"✗ {e}")
+            return 1
+        if to_sec <= from_sec:
+            print(f"✗ --to ({args.to_ts}) must be after --from ({args.from_ts})")
+            return 1
+        created = clip_mod.run(args.url, exact=(from_sec, to_sec), **common_kwargs)
+    elif args.from_ts is not None or args.to_ts is not None:
+        print("✗ --from and --to must be used together")
+        return 1
+    else:
+        created = clip_mod.run(args.url,
+                               window_sec=int(args.window * 60) if args.window else None,
+                               start_sec=int(args.start * 60) if args.start else 0,
+                               **common_kwargs)
     if not created:
         print("✗ no clips produced (check the URL / yt-dlp / whisper output)")
         return 1
@@ -124,6 +172,49 @@ def _cmd_clip(args: argparse.Namespace) -> int:
         print(f"  · {c['clip_id']}  {c['len']}s  score {c['score']}  “{c['preview']}…”")
     print("\nNext: `ycp qc-post` to send them to Slack for approval.")
     return 0
+
+
+def _cmd_refine(args: argparse.Namespace) -> int:
+    from . import refine
+    r = refine.apply(args.clip_id, [{"type": args.type, "value": args.value}])
+    if r.get("ok"):
+        print(f"✓ {args.type}: re-cut → {r['clip_id']} ({r['bounds'][0]}–{r['bounds'][1]}s) "
+              f"in unreviewed/  ·  same moment, not re-sourced")
+        return 0
+    print(f"✗ {r.get('reason')}")
+    return 1
+
+
+def _cmd_notes(args: argparse.Namespace) -> int:
+    from . import notes
+    folder = ROOT / "data" / "clips" / args.folder
+    found = notes.collect(folder) if folder.exists() else []
+    if not found:
+        print(f"(no notes in {args.folder}/ — attach one by renaming a clip "
+              f"'<id> -- your note.mp4' or via Finder ⌘I → Comments)")
+        return 0
+    print(f"📝 {len(found)} noted clip(s) in {args.folder}/:")
+    for cid, note, _ in found:
+        print(f"  {cid}  →  {note}")
+    return 0
+
+
+def _cmd_goldmine(args: argparse.Namespace) -> int:
+    from . import goldmine
+    peaks, title = goldmine.run(args.url, top=args.top)
+    md = goldmine.render_md(args.url, peaks, title)
+    print(md)
+    out = ROOT / "data" / "goldmine.md"
+    out.write_text(md)
+    print(f"✓ {len(peaks)} rewatch peaks · written to {out}")
+    if args.cut and peaks:
+        from . import clip as clip_mod
+        print(f"\n→ cutting the top {min(args.cut, len(peaks))} peak(s)…")
+        for p in peaks[:args.cut]:
+            clip_mod.run(args.url, max_clips=1, source_creator=args.creator,
+                         channel=args.channel, start_sec=int(p.start),
+                         window_sec=p.window_sec, title=args.title)
+    return 0 if peaks else 1
 
 
 def _cmd_autopilot(args: argparse.Namespace) -> int:
@@ -222,8 +313,36 @@ def build_parser() -> argparse.ArgumentParser:
                     help="skip our word-by-word captions (defer to a source that already has them)")
     cl.add_argument("--gameplay", help="path to a gameplay loop to split-screen under clips")
     cl.add_argument("--window", type=float, metavar="MIN",
-                    help="only process the first MIN minutes of the source (bounds long podcasts)")
+                    help="process a MIN-minute slice of the source (bounds long podcasts)")
+    cl.add_argument("--start", type=float, metavar="MIN", default=0,
+                    help="start the slice MIN minutes in (skip the cold-open montage; target deep gold). "
+                         "Pair with --window, e.g. --start 42 --window 8")
+    cl.add_argument("--from", dest="from_ts", metavar="TS", default=None,
+                    help="operator-pointed exact cut: absolute start timestamp (MM:SS, HH:MM:SS, "
+                         "or seconds). Skips moment-picking entirely and cuts exactly this bound "
+                         "(still runs captions + the Gemini gate). Requires --to.")
+    cl.add_argument("--to", dest="to_ts", metavar="TS", default=None,
+                    help="operator-pointed exact cut: absolute end timestamp (MM:SS, HH:MM:SS, "
+                         "or seconds). Requires --from, e.g. --from 12:03 --to 12:41")
     cl.set_defaults(fn=_cmd_clip)
+    rf = sub.add_parser("refine", help="re-cut a clip's EXACT moment with one fix (start|end|crop|captions|hook)")
+    rf.add_argument("clip_id")
+    rf.add_argument("type", choices=["start", "end", "crop", "captions", "hook"])
+    rf.add_argument("value", nargs="?", default="", help="seconds (start/end, signed) | text (hook) | guidance")
+    rf.set_defaults(fn=_cmd_refine)
+    nt = sub.add_parser("notes", help="list operator review-notes attached to clips (filename ' -- ' or Finder comment)")
+    nt.add_argument("--folder", default="unusable", help="clips subfolder to scan (default unusable)")
+    nt.set_defaults(fn=_cmd_notes)
+    gm = sub.add_parser("goldmine",
+                        help="find a video's most-rewatched moments (YouTube heatmap + subs)")
+    gm.add_argument("url", help="source video URL")
+    gm.add_argument("--top", type=int, default=5, help="how many rewatch peaks to surface (default 5)")
+    gm.add_argument("--cut", type=int, metavar="N", default=0,
+                    help="also auto-cut the top N peaks into clips")
+    gm.add_argument("--creator", default="unknown", help="source creator label (with --cut)")
+    gm.add_argument("--channel", default="ai-frontier", help="target channel label (with --cut)")
+    gm.add_argument("--title", help="hook title for the cut clips (with --cut)")
+    gm.set_defaults(fn=_cmd_goldmine)
     sb = sub.add_parser("scoreboard", help="Race to $15K — the gamified game state")
     sb.add_argument("--demo", action="store_true", help="render from demo data")
     sb.set_defaults(fn=_cmd_scoreboard)
