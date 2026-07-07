@@ -20,6 +20,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 use crate::http::{delete, get_json, post_json};
+use crate::sheet::Sheet;
 
 // ── API shapes (server.rs Project / Render / publish routes) ──────────────────
 
@@ -293,6 +294,47 @@ fn project_editor(project: Project) -> impl IntoView {
     };
     let has_candidates = !project.candidates.is_empty();
 
+    // ── Phone tree (P6 gesture polish) — glance → sheet → screen ──────────────
+    // The desktop sidebar hides ≤48rem; its sections re-mount inside two
+    // drag-dismissable bottom sheets, sharing the SAME player + video_ref.
+    let act_open = RwSignal::new(false);
+    let out_open = RwSignal::new(false);
+    let n_outputs = project.renders.len()
+        + project.compiles.len()
+        + project.stories.len()
+        + project.commentary.len();
+    // Section views are built eagerly here (they borrow `project`), then move
+    // into the sheets' children closures as plain view data.
+    let act_body = (
+        sidebar_actions(&project),
+        (project.candidates.len() >= 2).then(|| compile_section(&project)),
+    );
+    let out_body = (
+        (!project.renders.is_empty()).then(|| renders_list(&project, publish_modal)),
+        (!project.compiles.is_empty()).then(|| compiles_list(&project, publish_modal)),
+        (!project.stories.is_empty()).then(|| {
+            studio_output_list(
+                &project.stories,
+                "Storytelling",
+                "📖",
+                "linear-gradient(135deg,#7c3aed,#5b21b6)",
+                &project.id,
+                publish_modal,
+            )
+        }),
+        (!project.commentary.is_empty()).then(|| {
+            studio_output_list(
+                &project.commentary,
+                "Commentary",
+                "🎬",
+                "linear-gradient(135deg,#0891b2,#155e75)",
+                &project.id,
+                publish_modal,
+            )
+        }),
+    );
+    let rail = has_candidates.then(|| moments_rail(&project, video_ref));
+
     view! {
         <div class="page-header">
             <div>
@@ -369,7 +411,7 @@ fn project_editor(project: Project) -> impl IntoView {
                         .into_any()
                 }}
             </div>
-            <div class="editor-sidebar">
+            <div class="editor-sidebar rt-donly">
                 {sidebar_actions(&project)}
                 {(project.candidates.len() >= 2).then(|| compile_section(&project))}
                 {has_candidates.then(|| candidate_list(&project, video_ref))}
@@ -399,8 +441,69 @@ fn project_editor(project: Project) -> impl IntoView {
                     })}
             </div>
         </div>
+        <div class="rt-monly">
+            {rail}
+            <div class="rt-mactions">
+                <button class="btn btn-primary" on:click=move |_| act_open.set(true)>
+                    "✂️ Actions"
+                </button>
+                <button
+                    class="btn"
+                    disabled=n_outputs == 0
+                    on:click=move |_| out_open.set(true)
+                >
+                    {format!("📦 Outputs ({n_outputs})")}
+                </button>
+            </div>
+        </div>
+        <Sheet open=act_open title="Actions">{act_body}</Sheet>
+        <Sheet open=out_open title="Outputs">{out_body}</Sheet>
         {move || publish_modal.get().map(|t| publish_modal_view(t, publish_modal))}
     }
+}
+
+/// Phone-only horizontal swipe rail of ranked moments — CSS scroll-snap does
+/// the gesture physics; tap seeks the shared player (same behavior as the
+/// desktop candidate list).
+fn moments_rail(project: &Project, video_ref: NodeRef<html::Video>) -> impl IntoView {
+    let mut sorted = project.candidates.clone();
+    sorted.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let cards = sorted
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let hot = c.score >= 3.0;
+            let start = c.start;
+            view! {
+                <button
+                    type="button"
+                    class="rt-mcard"
+                    on:click=move |_| {
+                        if let Some(v) = video_ref.get_untracked() {
+                            v.set_current_time(start);
+                            let _ = v.play();
+                        }
+                    }
+                >
+                    <div class="rt-mcard-head">
+                        <span class="pill">{format!("#{}", i + 1)}</span>
+                        <span class=if hot { "cand-score hot" } else { "cand-score" }>
+                            {format!("★ {:.2}", c.score)}
+                        </span>
+                        <span class="cand-time">
+                            {format!("{}–{}", fmt_time(c.start), fmt_time(c.end))}
+                        </span>
+                    </div>
+                    <div class="rt-mcard-text">{take_chars(&c.text, 120)}</div>
+                </button>
+            }
+        })
+        .collect_view();
+    view! { <div class="rt-mrail">{cards}</div> }
 }
 
 // ── Timeline component (app.js timelineView) ──────────────────────────────────

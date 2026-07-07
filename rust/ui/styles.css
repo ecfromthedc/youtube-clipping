@@ -1214,6 +1214,75 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* ── P6 gesture polish — drag-to-dismiss sheet chrome + swipe rail ──────────
+   (campaign hub Phase-6 recipe: transition gives the snap-back; .rt-dragging
+   kills transition+animation so the sheet tracks the finger 1:1; no inline
+   transform at rest so the entrance keyframe replays on reopen.) */
+.rt-sheet { transition: transform 0.18s ease; }
+.rt-sheet.rt-dragging { transition: none; animation: none; }
+.rt-sheet-draghandle {
+  touch-action: none; /* required: lets pointermove fire during a touch drag */
+  cursor: grab;
+  padding: 6px 0 2px;
+}
+.rt-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.rt-sheet-head .title { font-weight: 700; font-size: 15px; }
+.rt-sheet-x {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* Swipeable moments rail — CSS scroll-snap does the gesture physics. */
+.rt-mrail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px 12px;
+  scrollbar-width: none;
+}
+.rt-mrail::-webkit-scrollbar { display: none; }
+.rt-mcard {
+  scroll-snap-align: start;
+  flex: 0 0 76%;
+  text-align: left;
+  background: linear-gradient(145deg, rgba(24, 30, 39, 0.86), rgba(9, 13, 20, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+.rt-mcard:active { border-color: var(--accent); }
+.rt-mcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.rt-mcard-text {
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rt-mactions { display: flex; gap: 8px; margin-top: 4px; }
+.rt-mactions .btn { flex: 1; }
+
 /* ── copilot panel (P4) — replaces window.prompt; errors render in-panel ──── */
 .pa-panel {
   position: fixed;

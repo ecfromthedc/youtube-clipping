@@ -12,6 +12,7 @@
 mod copilot;
 mod http;
 mod pages;
+mod sheet;
 
 use leptos::prelude::*;
 
