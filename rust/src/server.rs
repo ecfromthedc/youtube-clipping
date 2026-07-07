@@ -1041,7 +1041,10 @@ struct TopParam {
 
 const DEEPSEEK_BASE: &str = "https://api.deepseek.com/v1";
 const DEEPSEEK_MODEL: &str = "deepseek-chat";
-const PAGE_AGENT_SYSTEM: &str = "You are Tides Tiller Copilot, an in-page assistant inside an internal team video editor. You can click, type, and navigate the page on the user's behalf. Available actions: navigate (Projects / Studio / Analytics / Pipeline topbar links); on Projects click '+ New project' to upload a video, then 'Transcribe & find clips'; on the project page use '🏆 Ranking compilation' sidebar section to compile the top 5 moments (click Compile ranking video); on Studio pick a format (Ranking / Storytelling / Commentary) and fill the form fields then click Render Short; on any rendered card click the 📤 button to publish to a Postiz YouTube channel; on Analytics view channel rollups and top posts. Be terse — say what you're doing in one line, then do it. If the user asks for something not on the page, say so.";
+/// Copilot system prompt — GENERATED from the action map (rust/src/actions.rs)
+/// so it can't drift from the real UI; cargo test enforces the markers.
+static PAGE_AGENT_SYSTEM: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(crate::actions::system_prompt);
 
 async fn llm_proxy_chat(
     State(s): State<AppState>,
@@ -1055,7 +1058,7 @@ async fn llm_proxy_chat(
 
     // Force our system prompt to the front so the agent always knows the editor shape.
     if let Some(msgs) = req.get_mut("messages").and_then(Value::as_array_mut) {
-        let sys = json!({ "role": "system", "content": PAGE_AGENT_SYSTEM });
+        let sys = json!({ "role": "system", "content": &*PAGE_AGENT_SYSTEM });
         msgs.insert(0, sys);
     }
     // Pin the model to DeepSeek (the key the team holds) unless the caller set one.
@@ -1067,8 +1070,17 @@ async fn llm_proxy_chat(
         obj.remove("apiKey");
     }
 
-    let key = config::env_var(&s.root, "DEEPSEEK_API_KEY")
-        .ok_or_else(|| AppError(anyhow!("DEEPSEEK_API_KEY not set in .env")))?;
+    // LOUD failure (P4): no key → clear 503 in the OpenAI error shape the Page
+    // Agent panel surfaces to the user — not a generic 500 buried in a console.
+    let Some(key) = config::env_var(&s.root, "DEEPSEEK_API_KEY") else {
+        return Ok((
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CONTENT_TYPE, "application/json")],
+            Json(json!({ "error": { "message": "DEEPSEEK_API_KEY not configured on the server — copilot disabled. Add it to .env and restart ycp serve." } }))
+                .to_string(),
+        )
+            .into_response());
+    };
     let stream = req.get("stream").and_then(Value::as_bool).unwrap_or(false);
 
     let req_for_task = req.clone();

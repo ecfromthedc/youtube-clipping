@@ -10,6 +10,19 @@
          never edited during the port. Fonts + logo resolve to /static/* which the
          ycp server already serves from the embedded old bundle. -->
     <link data-trunk rel="css" href="styles.css" />
+    <!-- Vendored Page Agent (P4): pinned 1.11.0, bundled self-contained via
+         esbuild from npm — NO CDN at runtime (an esm.sh hiccup used to blank
+         the whole old app; never again). copilot.rs consumes window.PageAgent. -->
+    <link data-trunk rel="copy-file" href="vendor/page-agent-1.11.0.bundle.mjs" />
+    <script type="module">
+      const base = location.pathname.startsWith("/next") ? "/next/" : "/";
+      try {
+        const m = await import(base + "page-agent-1.11.0.bundle.mjs");
+        window.PageAgent = m.PageAgent;
+      } catch (e) {
+        console.error("Page Agent vendored bundle failed to load:", e);
+      }
+    </script>
     <link
       data-trunk
       rel="rust"

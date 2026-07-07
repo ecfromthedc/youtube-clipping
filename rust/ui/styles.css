@@ -1206,3 +1206,34 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   from { transform: translateY(24px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ── copilot panel (P4) — replaces window.prompt; errors render in-panel ──── */
+.pa-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 80;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(24, 30, 39, 0.98), rgba(9, 13, 20, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: var(--r-sm);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.pa-panel-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.pa-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 8, 13, 0.7);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.pa-input:focus { outline: none; border-color: var(--accent); }
+@media (max-width: 48rem) {
+  /* Clear the bottom tab bar on phones. */
+  .pa-trigger { bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .pa-panel { bottom: calc(140px + env(safe-area-inset-bottom)); right: 16px; }
+}

@@ -9,6 +9,7 @@
 //! Trunk.toml, index.html, and styles.css are off-limits to page agents. Pages
 //! own only their pages/<name>.rs. Gaps get reported, not hand-patched here.
 
+mod copilot;
 mod http;
 mod pages;
 
@@ -39,6 +40,7 @@ fn app() -> impl IntoView {
     view! {
         <Topbar route=route />
         <main class="page">{move || page_for(route.get())}</main>
+        <copilot::Copilot />
     }
 }
 
