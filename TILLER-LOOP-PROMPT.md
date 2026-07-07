@@ -1,5 +1,10 @@
 # Goal + Loop Prompt: Tides Tiller — Rust UI port + Page Agent long-haul hardening
 
+> **STATUS (2026-07-07): ALL PHASES SHIPPED.** P0→P5 complete, plus P3.5 (mobile form factor)
+> and P4.5 (agent-runnable formats — `GET /api/formats`). `rust/web` is deleted; the Leptos UI
+> IS the Tiller, live at tidestiller.risingtidesviral.com. This file stays as the maintenance
+> contract: the Method, gates, and Guardrails below still govern all future Tiller UI work.
+
 **What exists:** the Tiller is a vanilla-JS SPA (`rust/web/app.js` 1,249 lines + `styles.css`,
 hash router) embedded via rust-embed into the `ycp` binary, served by axum (`rust/src/server.rs`)
 on `:8788` → cloudflared tunnel → **tidestiller.risingtidesviral.com**. The Page Agent copilot is

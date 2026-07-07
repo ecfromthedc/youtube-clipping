@@ -11,35 +11,35 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/static/fonts/Poppins-Regular.woff2") format("woff2");
+  src: url("/fonts/Poppins-Regular.woff2") format("woff2");
 }
 @font-face {
   font-family: "Poppins";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("/static/fonts/Poppins-Medium.woff2") format("woff2");
+  src: url("/fonts/Poppins-Medium.woff2") format("woff2");
 }
 @font-face {
   font-family: "Poppins";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("/static/fonts/Poppins-SemiBold.woff2") format("woff2");
+  src: url("/fonts/Poppins-SemiBold.woff2") format("woff2");
 }
 @font-face {
   font-family: "Poppins";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("/static/fonts/Poppins-Bold.woff2") format("woff2");
+  src: url("/fonts/Poppins-Bold.woff2") format("woff2");
 }
 @font-face {
   font-family: "Poppins";
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src: url("/static/fonts/Poppins-BoldItalic.woff2") format("woff2");
+  src: url("/fonts/Poppins-BoldItalic.woff2") format("woff2");
 }
 
 :root {
@@ -1159,6 +1159,13 @@ button, input, textarea, select { font-family: inherit; font-size: 14px; }
   /* Alerts read as prose on a phone, not a squeezed flex row. */
   .alert { display: block; }
   .alert code { display: inline-block; margin: 2px 0; word-break: break-all; }
+
+  /* Editor on a phone: grid items may shrink (min-width:auto trap), the
+     player fits the column, the proportional timeline clips its edge label. */
+  .editor-main,
+  .editor-sidebar { min-width: 0; }
+  .player { width: 100%; max-width: 100%; height: auto; }
+  .timeline { overflow-x: clip; }
 }
 
 /* Dual-tree primitives (campaign hub pattern): desktop tree wrapped in

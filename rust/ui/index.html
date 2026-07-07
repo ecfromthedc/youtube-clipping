@@ -10,6 +10,8 @@
          never edited during the port. Fonts + logo resolve to /static/* which the
          ycp server already serves from the embedded old bundle. -->
     <link data-trunk rel="css" href="styles.css" />
+    <link data-trunk rel="copy-dir" href="fonts" />
+    <link data-trunk rel="copy-file" href="logo.svg" />
     <!-- Vendored Page Agent (P4): pinned 1.11.0, bundled self-contained via
          esbuild from npm — NO CDN at runtime (an esm.sh hiccup used to blank
          the whole old app; never again). copilot.rs consumes window.PageAgent. -->

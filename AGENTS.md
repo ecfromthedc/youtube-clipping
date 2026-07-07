@@ -90,7 +90,7 @@ curl -s $BASE/api/formats | jq '.formats[].format'        # discover
 ID=$(curl -s -X POST $BASE/api/projects -H 'Content-Type: application/json' \
      -d '{"filename":"raw.mp4"}' | jq -r .id)
 curl -s -X POST $BASE/api/projects/$ID/upload -F file=@raw.mp4
-curl -s -X POST $BASE/api/projects/$ID/transcribe          # → ranked candidates[]
+curl -s -X POST $BASE/api/projects/$ID/transcribe -H 'Content-Type: application/json' -d '{}'
 curl -s -X POST $BASE/api/projects/$ID/render \
      -H 'Content-Type: application/json' -d '{"start":12.4,"end":41.0,"title":"hook here"}'
 # story / commentary are standalone (OmniVoice must be up for VO — check GET /api/voices):

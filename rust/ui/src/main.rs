@@ -80,7 +80,7 @@ fn Topbar(route: RwSignal<String>) -> impl IntoView {
         <header class="topbar">
             <a class="brand" href="#/">
                 <span class="brand-mark clay">
-                    <img src="/static/logo.svg" alt="Tides Tiller" class="brand-mark-img" />
+                    <img src="/logo.svg" alt="Tides Tiller" class="brand-mark-img" />
                 </span>
                 <span class="brand-name">
                     <span>"Tides"</span>

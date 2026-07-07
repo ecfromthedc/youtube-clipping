@@ -1,9 +1,8 @@
 [build]
 dist = "dist"
 offline = false
-# Side-by-side phase: the new UI mounts at /next on the ycp server, so every
-# asset URL must be /next/-prefixed. Flipped to "/" at P5 cutover.
-public_url = "/next/"
+# P5 cutover done: the Leptos UI IS the Tiller, served at /.
+public_url = "/"
 
 # Pin a modern binaryen: Trunk's bundled wasm-opt is too old for the
 # bulk-memory ops Rust now emits for wasm32 (same fix as campaign hub).

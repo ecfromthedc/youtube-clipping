@@ -2,8 +2,8 @@
 //!
 //! One binary boots an axum server that exposes the existing `transcribe`,
 //! `clip::plan_clips`, `clip::cut_vertical`, and `captions::burn_captions` modules
-//! over a small REST API, with a viblo-inspired editor embedded in the binary
-//! (rust-embed → still ships as a single static file).
+//! over a small REST API, with the Leptos editor UI (rust/ui) served from
+//! ui/dist (rebuild via rust/scripts/build-ui.sh).
 //!
 //! The pipeline stays the source of truth — this layer only orchestrates it for
 //! interactive browser use. POST a video → we transcribe + rank candidate windows
@@ -27,7 +27,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
@@ -39,10 +38,9 @@ use crate::{
 // Adapter::deliver is a trait method — bring it into scope for the publish path.
 use distribute::Adapter;
 
-/// Embedded static frontend (rust-embed) — bundled at compile time.
-#[derive(RustEmbed)]
-#[folder = "web/"]
-struct WebAsset;
+// Frontend: the Leptos UI (rust/ui) served from ui/dist on disk — rebuild with
+// rust/scripts/build-ui.sh. Disk-serving keeps `cargo build`/`cargo test`
+// decoupled from trunk (this server runs from the repo on the Mac mini).
 
 /// Per-process shared state: the project registry + project root.
 #[derive(Clone)]
@@ -125,8 +123,6 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
     warm_cache(&state).await;
 
     let app = Router::new()
-        .route("/", get(index_handler))
-        .route("/editor", get(index_handler)) // SPA: any app route → index.html
         .route("/api/health", get(health))
         // Agent surface: machine-readable registry of every template/format +
         // how to run it headlessly (rust/src/formats.rs, drift-tested).
@@ -151,14 +147,14 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         // browser agent can drive the editor without the key landing in client JS.
         .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
-        // Side-by-side phase (TILLER-LOOP-PROMPT.md P0): the Leptos rewrite is
-        // served at /next from rust/ui/dist while the old bundle keeps serving /.
-        // ponytail: disk reads for now; folds into rust-embed at P5 cutover.
-        .route("/next", get(next_ui_index))
-        .route("/next/", get(next_ui_index))
-        .route("/next/*path", get(next_ui_asset))
-        .route("/static/*path", get(static_handler))
-        .fallback(get(index_handler)) // unknown → SPA shell
+        // P5 cutover: /next (the side-by-side preview mount) now redirects home.
+        .route("/next", get(next_redirect))
+        .route("/next/", get(next_redirect))
+        .route("/next/*path", get(next_redirect))
+        .fallback(get(ui_asset)) // dist file if it exists, else SPA shell
+        // Raw footage is routinely 100MB-2GB; axum's 2MB default rejected any
+        // real upload (caught in P5 production test — pre-existing bug).
+        .layer(axum::extract::DefaultBodyLimit::max(4 * 1024 * 1024 * 1024))
         .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
@@ -1214,14 +1210,21 @@ fn format_relative_for_download(root: &Path, abs_path: &Path, id: &str) -> Strin
 
 // ── routes — static + project files ───────────────────────────────────────────
 
-/// Serve `/` and the SPA shell.
-async fn index_handler() -> Response {
-    static_response("index.html")
+/// Redirect the retired /next preview mount to the real thing.
+async fn next_redirect() -> Response {
+    Response::builder()
+        .status(StatusCode::MOVED_PERMANENTLY)
+        .header(header::LOCATION, "/")
+        .body(Body::empty())
+        .unwrap()
 }
 
-/// Serve embedded static files under /static/...
-async fn static_handler(AxumPath(path): AxumPath<String>) -> Response {
-    static_response(&path)
+/// Fallback: serve the Leptos UI from rust/ui/dist — the requested file if it
+/// exists, else index.html (SPA shell; the hash router owns the route).
+async fn ui_asset(State(s): State<AppState>, uri: axum::http::Uri) -> Response {
+    let rel = uri.path().trim_start_matches('/');
+    let rel = if rel.is_empty() { "index.html" } else { rel };
+    ui_dist_file(&s.root, rel).await
 }
 
 /// Stream a rendered video back to the browser.
@@ -1245,16 +1248,7 @@ async fn serve_project_file(
     Ok(resp)
 }
 
-/// Serve the Leptos rewrite (rust/ui/dist) at /next during the side-by-side phase.
-async fn next_ui_index(State(s): State<AppState>) -> Response {
-    next_dist_file(&s.root, "index.html").await
-}
-
-async fn next_ui_asset(State(s): State<AppState>, AxumPath(path): AxumPath<String>) -> Response {
-    next_dist_file(&s.root, &path).await
-}
-
-async fn next_dist_file(root: &Path, rel: &str) -> Response {
+async fn ui_dist_file(root: &Path, rel: &str) -> Response {
     let dist = root.join("rust/ui/dist");
     // Trust boundary: rel comes off the URL — canonicalize and require the
     // result to stay inside dist (same posture as serve_project_file).
@@ -1268,15 +1262,15 @@ async fn next_dist_file(root: &Path, rel: &str) -> Response {
                 return Response::builder()
                     .status(StatusCode::SERVICE_UNAVAILABLE)
                     .body(Body::from(
-                        "new UI not built — run: cd rust/ui && trunk build",
+                        "new UI not built — run: ./rust/scripts/build-ui.sh",
                     ))
                     .unwrap();
             }
-            return next_dist_bytes(&index).await;
+            return ui_dist_bytes(&index).await;
         }
     };
     match dist.canonicalize() {
-        Ok(base) if full.starts_with(&base) => next_dist_bytes(&full).await,
+        Ok(base) if full.starts_with(&base) => ui_dist_bytes(&full).await,
         _ => Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("not found"))
@@ -1284,7 +1278,7 @@ async fn next_dist_file(root: &Path, rel: &str) -> Response {
     }
 }
 
-async fn next_dist_bytes(path: &Path) -> Response {
+async fn ui_dist_bytes(path: &Path) -> Response {
     match tokio::fs::read(path).await {
         Ok(bytes) => {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
@@ -1296,24 +1290,6 @@ async fn next_dist_bytes(path: &Path) -> Response {
             resp
         }
         Err(_) => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from("not found"))
-            .unwrap(),
-    }
-}
-
-fn static_response(path: &str) -> Response {
-    match WebAsset::get(path) {
-        Some(asset) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
-            let mut resp = Response::new(Body::from(asset.data.into_owned()));
-            resp.headers_mut()
-                .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
-            resp.headers_mut()
-                .insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
-            resp
-        }
-        None => Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("not found"))
             .unwrap(),

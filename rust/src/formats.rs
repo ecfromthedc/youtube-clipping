@@ -85,7 +85,7 @@ pub fn formats_manifest() -> Value {
             "steps": [
                 { "step": "create",     "call": format!("POST {EP_PROJECTS} {{\"filename\": \"raw.mp4\"}} → {{id}}") },
                 { "step": "upload",     "call": "POST /api/projects/:id/upload (multipart form field 'file')" },
-                { "step": "transcribe", "call": "POST /api/projects/:id/transcribe → ranked candidates[]" },
+                { "step": "transcribe", "call": "POST /api/projects/:id/transcribe with Content-Type: application/json and body {} → ranked candidates[]" },
                 { "step": "inspect",    "call": "GET /api/projects/:id → {candidates, renders, compiles, stories, commentary}" },
                 { "step": "render",     "call": "one of the formats above → {path} (download via the returned /api/projects/:id/files/... path)" },
                 { "step": "voices",     "call": format!("GET {EP_VOICES} → OmniVoice availability + voice list (story/commentary need the local Studio server)") }
