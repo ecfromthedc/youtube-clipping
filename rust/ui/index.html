@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tides Tiller</title>
+    <!-- styles.css is the parity contract: copied verbatim from rust/web/styles.css,
+         never edited during the port. Fonts + logo resolve to /static/* which the
+         ycp server already serves from the embedded old bundle. -->
+    <link data-trunk rel="css" href="styles.css" />
+    <link
+      data-trunk
+      rel="rust"
+      data-wasm-opt="z"
+      data-wasm-opt-params="--enable-bulk-memory-opt --enable-nontrapping-float-to-int"
+    />
+  </head>
+  <body></body>
+</html>

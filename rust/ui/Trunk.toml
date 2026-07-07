@@ -1,0 +1,22 @@
+[build]
+dist = "dist"
+offline = false
+# Side-by-side phase: the new UI mounts at /next on the ycp server, so every
+# asset URL must be /next/-prefixed. Flipped to "/" at P5 cutover.
+public_url = "/next/"
+
+# Pin a modern binaryen: Trunk's bundled wasm-opt is too old for the
+# bulk-memory ops Rust now emits for wasm32 (same fix as campaign hub).
+[tools]
+wasm_opt = "version_123"
+
+[serve]
+port = 8080
+open = false
+no_spa = false
+
+# Dev-only proxy: forwards /api/* to the local ycp server (live tunnel runs
+# `ycp serve --port 8788`). In production axum serves the dist itself.
+[[proxy]]
+rewrite = "/api"
+backend = "http://localhost:8788"

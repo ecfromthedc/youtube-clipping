@@ -32,7 +32,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::{analytics, captions, clip, commentary, config, distribute, listicle, srt, story, transcribe, voice};
+use crate::{
+    analytics, captions, clip, commentary, config, distribute, listicle, srt, story, transcribe,
+    voice,
+};
 // Adapter::deliver is a trait method — bring it into scope for the publish path.
 use distribute::Adapter;
 
@@ -145,6 +148,12 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         // browser agent can drive the editor without the key landing in client JS.
         .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
         .route("/api/projects/:id/files/*path", get(serve_project_file))
+        // Side-by-side phase (TILLER-LOOP-PROMPT.md P0): the Leptos rewrite is
+        // served at /next from rust/ui/dist while the old bundle keeps serving /.
+        // ponytail: disk reads for now; folds into rust-embed at P5 cutover.
+        .route("/next", get(next_ui_index))
+        .route("/next/", get(next_ui_index))
+        .route("/next/*path", get(next_ui_asset))
         .route("/static/*path", get(static_handler))
         .fallback(get(index_handler)) // unknown → SPA shell
         .with_state(state);
@@ -156,7 +165,10 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
     let bound = listener.local_addr()?;
     println!("ycp editor → http://localhost:{}", bound.port());
     println!("  · project root: {}", root.display());
-    println!("  · projects dir: {}", config::data_dir(root).join("editor").display());
+    println!(
+        "  · projects dir: {}",
+        config::data_dir(root).join("editor").display()
+    );
     axum::serve(listener, app).await.context("axum::serve")?;
     Ok(())
 }
@@ -281,9 +293,10 @@ async fn upload_video(
 
     // Probe duration synchronously (ffmpeg is fast on this).
     let dest_owned = dest.clone();
-    let duration = tokio::task::spawn_blocking(move || probe_duration(&dest_owned.to_string_lossy()))
-        .await
-        .map_err(|e| AppError(anyhow!("join: {e}")))??;
+    let duration =
+        tokio::task::spawn_blocking(move || probe_duration(&dest_owned.to_string_lossy()))
+            .await
+            .map_err(|e| AppError(anyhow!("join: {e}")))??;
 
     let mut projects = s.projects.write().await;
     let p = projects
@@ -307,8 +320,12 @@ struct TranscribeBody {
     #[serde(default)]
     top: Option<usize>,
 }
-fn default_min_len() -> f64 { 15.0 }
-fn default_max_len() -> f64 { clip::MAX_CLIP_SEC }
+fn default_min_len() -> f64 {
+    15.0
+}
+fn default_max_len() -> f64 {
+    clip::MAX_CLIP_SEC
+}
 
 async fn transcribe_project(
     State(s): State<AppState>,
@@ -332,28 +349,34 @@ async fn transcribe_project(
     let min_len = body.min_len;
     let max_len = body.max_len;
     let top = body.top;
-    let result = tokio::task::spawn_blocking(move || -> Result<(Vec<SerdeSegment>, Vec<SerdeCandidate>)> {
-        let workdir = std::env::temp_dir().join(format!("ycp-editor-{id_clone}"));
-        std::fs::create_dir_all(&workdir)?;
-        let segments = transcribe::transcribe(&root, &video, &workdir)?;
-        let cands = clip::plan_clips(&segments, min_len, max_len, top);
-        let _ = std::fs::remove_dir_all(&workdir);
-        let s_segs = segments
-            .iter()
-            .map(|sg| SerdeSegment { start: sg.start, end: sg.end, text: sg.text.clone() })
-            .collect();
-        let s_cands = cands
-            .iter()
-            .map(|c| SerdeCandidate {
-                start: c.start,
-                end: c.end,
-                duration: c.duration(),
-                score: c.score,
-                text: c.text.clone(),
-            })
-            .collect();
-        Ok((s_segs, s_cands))
-    })
+    let result = tokio::task::spawn_blocking(
+        move || -> Result<(Vec<SerdeSegment>, Vec<SerdeCandidate>)> {
+            let workdir = std::env::temp_dir().join(format!("ycp-editor-{id_clone}"));
+            std::fs::create_dir_all(&workdir)?;
+            let segments = transcribe::transcribe(&root, &video, &workdir)?;
+            let cands = clip::plan_clips(&segments, min_len, max_len, top);
+            let _ = std::fs::remove_dir_all(&workdir);
+            let s_segs = segments
+                .iter()
+                .map(|sg| SerdeSegment {
+                    start: sg.start,
+                    end: sg.end,
+                    text: sg.text.clone(),
+                })
+                .collect();
+            let s_cands = cands
+                .iter()
+                .map(|c| SerdeCandidate {
+                    start: c.start,
+                    end: c.end,
+                    duration: c.duration(),
+                    score: c.score,
+                    text: c.text.clone(),
+                })
+                .collect();
+            Ok((s_segs, s_cands))
+        },
+    )
     .await
     .map_err(|e| AppError(anyhow!("join: {e}")))??;
 
@@ -409,7 +432,13 @@ async fn render_clip(
         clip::cut_vertical(&root, &video, &cand, &staged, &workdir)?;
 
         // Build caption chunks from the source transcript overlapping [start,end].
-        let projects_json = std::fs::read_to_string(root.join("data").join("editor").join(&id_for_task).join("transcript.json")).ok();
+        let projects_json = std::fs::read_to_string(
+            root.join("data")
+                .join("editor")
+                .join(&id_for_task)
+                .join("transcript.json"),
+        )
+        .ok();
         let segs: Vec<srt::Segment> = match projects_json {
             Some(t) => serde_json::from_str::<Vec<SerdeSegment>>(&t)
                 .unwrap_or_default()
@@ -463,7 +492,10 @@ async fn render_clip(
     let p = projects
         .get_mut(&id)
         .ok_or_else(|| AppError(anyhow!("project vanished")))?;
-    p.renders.push(Render { path: result.0, title: title_used });
+    p.renders.push(Render {
+        path: result.0,
+        title: title_used,
+    });
     let render_idx = p.renders.len() - 1;
     Ok(Json(json!({
         "path": format!("/api/projects/{id}/files/{}", p.renders[render_idx].path),
@@ -561,10 +593,20 @@ async fn compile_project(
         let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S").to_string();
         let out_name = format!("{stamp}.mp4");
         let out_path = compiles_dir.join(&out_name);
-        listicle::compile(&root, &video, &segs, &items_for_task, &opts_for_task, &out_path)?;
+        listicle::compile(
+            &root,
+            &video,
+            &segs,
+            &items_for_task,
+            &opts_for_task,
+            &out_path,
+        )?;
         // Sidecar title for warm_cache.
         if !title_for_task.is_empty() {
-            let _ = std::fs::write(compiles_dir.join(format!("{out_name}.title")), &title_for_task);
+            let _ = std::fs::write(
+                compiles_dir.join(format!("{out_name}.title")),
+                &title_for_task,
+            );
         }
         let total: f64 = items_for_task.iter().map(|i| i.end - i.start).sum();
         Ok((format!("compiles/{out_name}"), total, items_for_task.len()))
@@ -576,7 +618,10 @@ async fn compile_project(
     let p = projects
         .get_mut(&id)
         .ok_or_else(|| AppError(anyhow!("project vanished")))?;
-    p.compiles.push(Render { path: result.0, title: title_used });
+    p.compiles.push(Render {
+        path: result.0,
+        title: title_used,
+    });
     Ok(Json(json!({
         "path": format!("/api/projects/{id}/files/{}", p.compiles.last().unwrap().path),
         "duration": result.1,
@@ -628,7 +673,15 @@ async fn studio_render(
     let _guard = STUDIO_MUTEX.lock().await;
     let result = tokio::task::spawn_blocking(move || -> Result<(String, String)> {
         match body {
-            StudioBody::Story { script, voice, background, title, speed, language, project } => {
+            StudioBody::Story {
+                script,
+                voice,
+                background,
+                title,
+                speed,
+                language,
+                project,
+            } => {
                 let bg = resolve_source(&root, &background, "background")?;
                 let opts = story::StoryOpts {
                     script,
@@ -645,7 +698,16 @@ async fn studio_render(
                 }
                 Ok((id, out_path.to_string_lossy().into_owned()))
             }
-            StudioBody::Commentary { source, script, voice, title, speed, language, duck_volume, project } => {
+            StudioBody::Commentary {
+                source,
+                script,
+                voice,
+                title,
+                speed,
+                language,
+                duck_volume,
+                project,
+            } => {
                 let src = resolve_source(&root, &source, "source")?;
                 let opts = commentary::CommentaryOpts {
                     source: src,
@@ -671,10 +733,6 @@ async fn studio_render(
 
     // Format the path for browser download.
     let (id, abs_path) = result;
-    let relative = abs_path
-        .strip_prefix(&format!("{}/", s.root.display()))
-        .unwrap_or(&abs_path);
-    let public_path = format!("/api/projects/{id}/files/{}", relative.trim_start_matches("data/editor/").trim_start_matches('/'));
     // The serve_project_file route takes the path relative to data/editor/<id>/.
     // For studio outputs we wrote into data/editor/<id>/<subdir>/<stamp>.mp4 — derive that.
     let download_path = format_relative_for_download(&s.root, std::path::Path::new(&abs_path), &id);
@@ -734,7 +792,11 @@ async fn list_postiz_integrations(State(s): State<AppState>) -> Json<Value> {
     let api_url = std::env::var("POSTIZ_API_URL").unwrap_or_else(|_| {
         config::load_settings(&s.root)
             .ok()
-            .and_then(|y| y["distribution"]["postiz"]["api_url"].as_str().map(String::from))
+            .and_then(|y| {
+                y["distribution"]["postiz"]["api_url"]
+                    .as_str()
+                    .map(String::from)
+            })
             .unwrap_or_else(|| "https://api.postiz.com/public/v1".to_string())
     });
 
@@ -802,10 +864,15 @@ async fn publish_to_postiz(
     // Format: /api/projects/<id>/files/<rel>
     let abs = resolve_editor_path(&s.root, &body.path)?;
     if !abs.exists() {
-        return Err(AppError(anyhow!("rendered file not found on disk: {}", abs.display())));
+        return Err(AppError(anyhow!(
+            "rendered file not found on disk: {}",
+            abs.display()
+        )));
     }
 
-    let settings = config::load_settings(&s.root).ok().unwrap_or_else(|| serde_yaml::Value::Null);
+    let settings = config::load_settings(&s.root)
+        .ok()
+        .unwrap_or_else(|| serde_yaml::Value::Null);
     let api_url = std::env::var("POSTIZ_API_URL").unwrap_or_else(|_| {
         settings["distribution"]["postiz"]["api_url"]
             .as_str()
@@ -829,7 +896,10 @@ async fn publish_to_postiz(
         caption: body.caption.clone().unwrap_or_else(|| body.title.clone()),
         title: Some(body.title.clone()),
         channel: Some("__editor__".to_string()),
-        platform: body.platform.clone().or_else(|| Some("youtube".to_string())),
+        platform: body
+            .platform
+            .clone()
+            .or_else(|| Some("youtube".to_string())),
         privacy: body.privacy.clone().or_else(|| Some("public".to_string())),
         date: body.date.clone(),
     };
@@ -838,7 +908,7 @@ async fn publish_to_postiz(
     let adapter_for_task = adapter;
     let meta_for_task = meta;
     let _guard = STUDIO_MUTEX.lock().await; // reuse the serialize-mutex — uploads are heavy
-    let result = tokio::task::spawn_blocking(move || -> Result<(String, )> {
+    let result = tokio::task::spawn_blocking(move || -> Result<(String,)> {
         let post_id = adapter_for_task.deliver(&abs_for_task, &meta_for_task)?;
         Ok((post_id,))
     })
@@ -868,7 +938,10 @@ fn write_publish_sidecar(render_abs: &Path, post_id: &str, integration_id: &str,
         "title": title,
         "published_at": chrono::Utc::now().to_rfc3339(),
     });
-    let _ = std::fs::write(&sidecar, serde_json::to_string_pretty(&payload).unwrap_or_default());
+    let _ = std::fs::write(
+        &sidecar,
+        serde_json::to_string_pretty(&payload).unwrap_or_default(),
+    );
 }
 
 // ── Analytics: channel rollup + per-video + recommendations ───────────────────
@@ -877,57 +950,88 @@ fn write_publish_sidecar(render_abs: &Path, post_id: &str, integration_id: &str,
 // and caches results for 1h (tight quotas). Routes degrade gracefully when OAuth isn't
 // connected (return {configured: false}, never 500).
 
-async fn an_rollup(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<DaysParam>) -> Json<Value> {
+async fn an_rollup(
+    State(s): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<DaysParam>,
+) -> Json<Value> {
     let days = q.days.unwrap_or(28);
     let root = s.root.clone();
-    let v = tokio::task::spawn_blocking(move || analytics::channel_rollup(&root, days).unwrap_or_else(|e| {
-        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
-    })).await.unwrap_or(json!({ "error": "join failed" }));
+    let v = tokio::task::spawn_blocking(move || {
+        analytics::channel_rollup(&root, days).unwrap_or_else(
+            |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
+        )
+    })
+    .await
+    .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
 }
 
-async fn an_top(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<TopParam>) -> Json<Value> {
+async fn an_top(
+    State(s): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<TopParam>,
+) -> Json<Value> {
     let days = q.days.unwrap_or(28);
     let limit = q.limit.unwrap_or(15);
     let root = s.root.clone();
-    let v = tokio::task::spawn_blocking(move || analytics::top_videos(&root, days, limit).unwrap_or_else(|e| {
-        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
-    })).await.unwrap_or(json!({ "error": "join failed" }));
+    let v = tokio::task::spawn_blocking(move || {
+        analytics::top_videos(&root, days, limit).unwrap_or_else(
+            |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
+        )
+    })
+    .await
+    .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
 }
 
-async fn an_daily(State(s): State<AppState>, axum::extract::Query(q): axum::extract::Query<DaysParam>) -> Json<Value> {
+async fn an_daily(
+    State(s): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<DaysParam>,
+) -> Json<Value> {
     let days = q.days.unwrap_or(7);
     let root = s.root.clone();
-    let v = tokio::task::spawn_blocking(move || analytics::daily_series(&root, days).unwrap_or_else(|e| {
-        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
-    })).await.unwrap_or(json!({ "error": "join failed" }));
+    let v = tokio::task::spawn_blocking(move || {
+        analytics::daily_series(&root, days).unwrap_or_else(
+            |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
+        )
+    })
+    .await
+    .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
 }
 
-async fn an_retention(
-    State(s): State<AppState>,
-    AxumPath(vid): AxumPath<String>,
-) -> Json<Value> {
+async fn an_retention(State(s): State<AppState>, AxumPath(vid): AxumPath<String>) -> Json<Value> {
     let root = s.root.clone();
-    let v = tokio::task::spawn_blocking(move || analytics::retention_curve(&root, &vid).unwrap_or_else(|e| {
-        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
-    })).await.unwrap_or(json!({ "error": "join failed" }));
+    let v = tokio::task::spawn_blocking(move || {
+        analytics::retention_curve(&root, &vid).unwrap_or_else(
+            |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
+        )
+    })
+    .await
+    .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
 }
 
 async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {
     let root = s.root.clone();
-    let v = tokio::task::spawn_blocking(move || analytics::recommendations(&root).unwrap_or_else(|e| {
-        json!({ "configured": analytics::configured(&root), "error": e.to_string() })
-    })).await.unwrap_or(json!({ "error": "join failed" }));
+    let v = tokio::task::spawn_blocking(move || {
+        analytics::recommendations(&root).unwrap_or_else(
+            |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
+        )
+    })
+    .await
+    .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
 }
 
 #[derive(Deserialize)]
-struct DaysParam { days: Option<u32> }
+struct DaysParam {
+    days: Option<u32>,
+}
 #[derive(Deserialize)]
-struct TopParam { days: Option<u32>, limit: Option<usize> }
+struct TopParam {
+    days: Option<u32>,
+    limit: Option<usize>,
+}
 
 // ── LLM proxy — keeps the DeepSeek key server-side for Page Agent ─────────────
 //
@@ -943,10 +1047,11 @@ async fn llm_proxy_chat(
     State(s): State<AppState>,
     body: axum::body::Body,
 ) -> Result<Response, AppError> {
-    let bytes = axum::body::to_bytes(body, usize::MAX).await
+    let bytes = axum::body::to_bytes(body, usize::MAX)
+        .await
         .map_err(|e| AppError(anyhow!("read body: {e}")))?;
-    let mut req: Value = serde_json::from_slice(&bytes)
-        .map_err(|e| AppError(anyhow!("parse json: {e}")))?;
+    let mut req: Value =
+        serde_json::from_slice(&bytes).map_err(|e| AppError(anyhow!("parse json: {e}")))?;
 
     // Force our system prompt to the front so the agent always knows the editor shape.
     if let Some(msgs) = req.get_mut("messages").and_then(Value::as_array_mut) {
@@ -966,11 +1071,14 @@ async fn llm_proxy_chat(
         .ok_or_else(|| AppError(anyhow!("DEEPSEEK_API_KEY not set in .env")))?;
     let stream = req.get("stream").and_then(Value::as_bool).unwrap_or(false);
 
-    let root = s.root.clone();
     let req_for_task = req.clone();
     let resp = tokio::task::spawn_blocking(move || -> Result<Value> {
         let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(if stream { 300 } else { 120 }))
+            .timeout(std::time::Duration::from_secs(if stream {
+                300
+            } else {
+                120
+            }))
             .build()?;
         let r = client
             .post(format!("{DEEPSEEK_BASE}/chat/completions"))
@@ -999,8 +1107,12 @@ fn resolve_editor_path(root: &Path, url_path: &str) -> Result<PathBuf> {
         bail!("bad path");
     }
     let prefix = "/api/projects/";
-    let rest = url_path.strip_prefix(prefix).ok_or_else(|| anyhow!("not an editor path"))?;
-    let (id, after) = rest.split_once("/files/").ok_or_else(|| anyhow!("malformed editor path"))?;
+    let rest = url_path
+        .strip_prefix(prefix)
+        .ok_or_else(|| anyhow!("not an editor path"))?;
+    let (id, after) = rest
+        .split_once("/files/")
+        .ok_or_else(|| anyhow!("malformed editor path"))?;
     let abs = config::data_dir(root).join("editor").join(id).join(after);
     Ok(abs)
 }
@@ -1015,9 +1127,16 @@ fn resolve_source(root: &Path, spec: &str, kind: &str) -> Result<std::path::Path
             let mut h = Sha1::new();
             h.update(spec.as_bytes());
             let digest = h.finalize();
-            digest.iter().take(4).map(|b| format!("{b:02x}")).collect::<String>()
+            digest
+                .iter()
+                .take(4)
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
         };
-        let dir = config::data_dir(root).join("studio").join("sources").join(&hash);
+        let dir = config::data_dir(root)
+            .join("studio")
+            .join("sources")
+            .join(&hash);
         std::fs::create_dir_all(&dir)?;
         let out = dir.join("source.mp4");
         if out.exists() {
@@ -1043,7 +1162,11 @@ fn resolve_source(root: &Path, spec: &str, kind: &str) -> Result<std::path::Path
 
 /// Build the output path for a studio render: data/editor/<id>/<subdir>/<stamp>.mp4.
 /// `project` may be None → a fresh synthetic project id is allocated.
-fn studio_output_path(root: &Path, project: Option<&str>, subdir: &str) -> Result<(String, std::path::PathBuf)> {
+fn studio_output_path(
+    root: &Path,
+    project: Option<&str>,
+    subdir: &str,
+) -> Result<(String, std::path::PathBuf)> {
     let id = match project {
         Some(id) if !id.is_empty() => id.to_string(),
         _ => uuid::Uuid::new_v4().to_string()[..8].to_string(),
@@ -1063,7 +1186,10 @@ fn format_relative_for_download(root: &Path, abs_path: &Path, id: &str) -> Strin
         return format!("/api/projects/{id}/files/{rel_str}");
     }
     // Fallback: just serve the absolute path raw (will 404, but the error is debuggable).
-    format!("/api/projects/{id}/files/{}", abs_path.file_name().unwrap_or_default().to_string_lossy())
+    format!(
+        "/api/projects/{id}/files/{}",
+        abs_path.file_name().unwrap_or_default().to_string_lossy()
+    )
 }
 
 // ── routes — static + project files ───────────────────────────────────────────
@@ -1094,8 +1220,66 @@ async fn serve_project_file(
     let mime = mime_guess::from_path(&full).first_or_octet_stream();
     let bytes = tokio::fs::read(&full).await?;
     let mut resp = Response::new(Body::from(bytes));
-    resp.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
+    resp.headers_mut()
+        .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
     Ok(resp)
+}
+
+/// Serve the Leptos rewrite (rust/ui/dist) at /next during the side-by-side phase.
+async fn next_ui_index(State(s): State<AppState>) -> Response {
+    next_dist_file(&s.root, "index.html").await
+}
+
+async fn next_ui_asset(State(s): State<AppState>, AxumPath(path): AxumPath<String>) -> Response {
+    next_dist_file(&s.root, &path).await
+}
+
+async fn next_dist_file(root: &Path, rel: &str) -> Response {
+    let dist = root.join("rust/ui/dist");
+    // Trust boundary: rel comes off the URL — canonicalize and require the
+    // result to stay inside dist (same posture as serve_project_file).
+    let full = match dist.join(rel).canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            // Unknown path → SPA shell (hash router owns the route)… unless the
+            // dist was never built, then say so instead of a blank page.
+            let index = dist.join("index.html");
+            if !index.exists() {
+                return Response::builder()
+                    .status(StatusCode::SERVICE_UNAVAILABLE)
+                    .body(Body::from(
+                        "new UI not built — run: cd rust/ui && trunk build",
+                    ))
+                    .unwrap();
+            }
+            return next_dist_bytes(&index).await;
+        }
+    };
+    match dist.canonicalize() {
+        Ok(base) if full.starts_with(&base) => next_dist_bytes(&full).await,
+        _ => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("not found"))
+            .unwrap(),
+    }
+}
+
+async fn next_dist_bytes(path: &Path) -> Response {
+    match tokio::fs::read(path).await {
+        Ok(bytes) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let mut resp = Response::new(Body::from(bytes));
+            resp.headers_mut()
+                .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
+            resp.headers_mut()
+                .insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
+            resp
+        }
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::from("not found"))
+            .unwrap(),
+    }
 }
 
 fn static_response(path: &str) -> Response {
@@ -1105,10 +1289,8 @@ fn static_response(path: &str) -> Response {
             let mut resp = Response::new(Body::from(asset.data.into_owned()));
             resp.headers_mut()
                 .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap());
-            resp.headers_mut().insert(
-                header::CACHE_CONTROL,
-                "no-cache".parse().unwrap(),
-            );
+            resp.headers_mut()
+                .insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
             resp
         }
         None => Response::builder()
@@ -1137,9 +1319,12 @@ fn scan_renders_dir(dir: &Path, prefix: &str) -> Vec<Render> {
     }
     mp4s.sort_by(|a, b| a.0.cmp(&b.0));
     for (name, path) in mp4s {
-        let title = std::fs::read_to_string(format!("{}.title", path.display()))
-            .unwrap_or_default();
-        out.push(Render { path: format!("{prefix}/{name}"), title });
+        let title =
+            std::fs::read_to_string(format!("{}.title", path.display())).unwrap_or_default();
+        out.push(Render {
+            path: format!("{prefix}/{name}"),
+            title,
+        });
     }
     out
 }
@@ -1190,10 +1375,11 @@ async fn warm_cache(s: &AppState) {
     let loaded = tokio::task::spawn_blocking(move || -> Vec<(String, Project)> {
         let mut out = Vec::new();
         for (id, dir) in to_load {
-            let transcript: Vec<SerdeSegment> = std::fs::read_to_string(dir.join("transcript.json"))
-                .ok()
-                .and_then(|t| serde_json::from_str(&t).ok())
-                .unwrap_or_default();
+            let transcript: Vec<SerdeSegment> =
+                std::fs::read_to_string(dir.join("transcript.json"))
+                    .ok()
+                    .and_then(|t| serde_json::from_str(&t).ok())
+                    .unwrap_or_default();
             let duration = std::fs::read_to_string(dir.join("duration.txt"))
                 .ok()
                 .and_then(|t| t.trim().parse().ok())
@@ -1227,7 +1413,17 @@ async fn warm_cache(s: &AppState) {
                 .unwrap_or_else(|| "upload.mp4".into());
             out.push((
                 id.clone(),
-                Project { id, filename, duration, transcript, candidates: cands, renders, compiles, stories, commentary },
+                Project {
+                    id,
+                    filename,
+                    duration,
+                    transcript,
+                    candidates: cands,
+                    renders,
+                    compiles,
+                    stories,
+                    commentary,
+                },
             ));
         }
         let _ = root; // touch root to keep the closure's intent clear (future: re-probe durations)
@@ -1248,7 +1444,10 @@ fn persist_project_meta(root: &Path, p: &Project) -> Result<()> {
     let dir = project_dir(root, &p.id);
     std::fs::create_dir_all(&dir)?;
     if !p.transcript.is_empty() {
-        std::fs::write(dir.join("transcript.json"), serde_json::to_vec(&p.transcript)?)?;
+        std::fs::write(
+            dir.join("transcript.json"),
+            serde_json::to_vec(&p.transcript)?,
+        )?;
     }
     std::fs::write(dir.join("duration.txt"), format!("{}", p.duration))?;
     std::fs::write(dir.join("filename.txt"), &p.filename)?;
@@ -1275,8 +1474,12 @@ impl IntoResponse for AppError {
 }
 
 impl From<std::io::Error> for AppError {
-    fn from(e: std::io::Error) -> Self { AppError(e.into()) }
+    fn from(e: std::io::Error) -> Self {
+        AppError(e.into())
+    }
 }
 impl From<anyhow::Error> for AppError {
-    fn from(e: anyhow::Error) -> Self { AppError(e) }
+    fn from(e: anyhow::Error) -> Self {
+        AppError(e)
+    }
 }
