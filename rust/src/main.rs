@@ -15,6 +15,7 @@ mod diagnose;
 mod distribute;
 mod enhance;
 mod experiment;
+mod formats;
 mod guardrails;
 mod hooks;
 mod listicle;

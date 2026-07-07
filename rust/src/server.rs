@@ -128,6 +128,9 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/", get(index_handler))
         .route("/editor", get(index_handler)) // SPA: any app route → index.html
         .route("/api/health", get(health))
+        // Agent surface: machine-readable registry of every template/format +
+        // how to run it headlessly (rust/src/formats.rs, drift-tested).
+        .route("/api/formats", get(formats_manifest_route))
         .route("/api/projects", get(list_projects).post(create_project))
         .route("/api/projects/:id", get(get_project).delete(delete_project))
         .route("/api/projects/:id/upload", post(upload_video))
@@ -177,6 +180,11 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
 
 async fn health(State(_s): State<AppState>) -> Json<Value> {
     Json(json!({ "ok": true, "service": "ycp-editor" }))
+}
+
+/// GET /api/formats — the agent-facing template/format registry.
+async fn formats_manifest_route() -> Json<Value> {
+    Json(crate::formats::formats_manifest())
 }
 
 /// List every project on disk (used by the dashboard).
