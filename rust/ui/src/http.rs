@@ -29,7 +29,10 @@ pub async fn get_json<T: DeserializeOwned>(url: &str) -> Result<T, String> {
     resp.json::<T>().await.map_err(|e| e.to_string())
 }
 
-pub async fn post_json<B: Serialize, T: DeserializeOwned>(url: &str, body: &B) -> Result<T, String> {
+pub async fn post_json<B: Serialize, T: DeserializeOwned>(
+    url: &str,
+    body: &B,
+) -> Result<T, String> {
     let resp = Request::post(url)
         .json(body)
         .map_err(|e| e.to_string())?
@@ -52,7 +55,10 @@ pub async fn post_empty<T: DeserializeOwned>(url: &str) -> Result<T, String> {
 }
 
 pub async fn delete(url: &str) -> Result<(), String> {
-    let resp = Request::delete(url).send().await.map_err(|e| e.to_string())?;
+    let resp = Request::delete(url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
     if !resp.ok() {
         return Err(error_message(resp).await);
     }

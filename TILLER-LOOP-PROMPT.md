@@ -55,7 +55,21 @@ gate below is green.
 - **P3 — The editor:** project page (`/p/:id`) — moments sidebar, ranking-compilation section,
   render form, renders list with Postiz publish (⚠ shared Postiz account: only ever the mapped
   integration id). Biggest page; split into sub-agents if needed, same shared-file rule.
-- **P4 — Page Agent long haul (the enhancement):**
+- **P3.5 — Mobile form factor (added 2026-07-06, Eric: "make this optimized for mobile too"):**
+  the campaign hub mobile recipe, scaled to the Tiller's 7 screens. Dual-tree where the desktop
+  shape doesn't translate, plain responsive where it does — cards and forms flow, tables never
+  scrunch. Concretely:
+  1. **Foundation first (one commit):** mobile additions APPENDED to styles.css under a
+     `/* ── mobile (≤48rem) — post-parity additions ── */` banner — media queries + new `rt-m*`
+     classes only, zero edits to existing rules so desktop stays pixel-identical and the parity
+     contract holds. Shell: below 48rem the topbar nav becomes a fixed bottom tab bar
+     (Projects / Studio / Analytics / Pipeline), thumb-reach, safe-area-inset padding.
+  2. **Page wave (page agents, same rules):** each page gets its ≤48rem treatment in its own
+     file — dashboard/pipeline/analytics cards stack single-column, studio forms go full-width
+     with sticky submit, the editor gets a phone layout (player on top, moments as a swipeable
+     card list, render actions as a bottom sheet — no side-by-side panes).
+  3. **Gate:** 375px sweep of every route (0px horizontal overflow, tab bar on every screen)
+     PLUS a desktop 1440px regression sweep — desktop must not move a pixel.
   1. **Vendor** `page-agent@1.11.0`: download the esm.sh bundle once, commit under
      `rust/ui/vendor/`, serve via rust-embed. Pin the version; kill the runtime CDN dependency.
   2. **Anti-drift action map:** move the copilot's capabilities out of the prose

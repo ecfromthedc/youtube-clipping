@@ -34,9 +34,7 @@ fn current_route() -> String {
 
 fn app() -> impl IntoView {
     let route = RwSignal::new(current_route());
-    window_event_listener(leptos::ev::hashchange, move |_| {
-        route.set(current_route())
-    });
+    window_event_listener(leptos::ev::hashchange, move |_| route.set(current_route()));
 
     view! {
         <Topbar route=route />
