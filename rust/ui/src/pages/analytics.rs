@@ -185,10 +185,12 @@ fn sparkline(views: &[f64]) -> AnyView {
 /// mirroring `!rollup || !rollup.configured`).
 fn oauth_warning() -> AnyView {
     view! {
-        <div class="alert alert-warn">
-            "⚠ YouTube Analytics OAuth not connected. Run "
-            <code class="mono">".venv/bin/python scripts/yt_oauth.py"</code>
-            " to enable channel rollups + per-video retention."
+        <div class="alert alert-warn" style="display:block">
+            "⚠ No YouTube channel connected yet. Click "
+            <a href="/api/oauth/yt/start">"＋ Connect a channel"</a>
+            " (top right) and approve with the channel's Google login — analytics "
+            "(views, retention, revenue) flow in from there. Multiple channels? "
+            "Connect each one and toggle between them right here."
         </div>
     }
     .into_any()
@@ -394,6 +396,20 @@ fn top_view(top: Option<TopVideos>) -> AnyView {
 
 // ── Page component ──
 
+/// Connected channels for the toggle — token-free (/api/channels).
+#[derive(Clone, Deserialize)]
+struct ChannelsResp {
+    #[serde(default)]
+    channels: Vec<ChannelMeta>,
+}
+#[derive(Clone, Deserialize, PartialEq)]
+struct ChannelMeta {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    title: String,
+}
+
 #[component]
 pub fn Analytics() -> impl IntoView {
     // One signal per request; `None` = failed fetch (JS `.catch(() => null)`).
@@ -403,33 +419,53 @@ pub fn Analytics() -> impl IntoView {
     let recs = RwSignal::new(None::<Recs>);
     // Countdown mirrors Promise.all: body renders only once all four settle.
     let pending = RwSignal::new(4_i32);
+    // Multi-channel toggle: connected channels + the one being viewed.
+    // None = server default (first connected channel, .env fallback).
+    let channels = RwSignal::new(Vec::<ChannelMeta>::new());
+    let selected = RwSignal::new(None::<String>);
 
-    // Fire all requests in parallel (try_* guards a late arrival after nav-away).
+    // Fire the four dashboard requests in parallel for one channel
+    // (try_* guards a late arrival after nav-away).
+    let load = move |chan: Option<String>| {
+        pending.set(4);
+        let q = chan.map(|c| format!("&channel={c}")).unwrap_or_default();
+        let q1 = q.clone();
+        spawn_local(async move {
+            let v = get_json::<Rollup>(&format!("/api/analytics/rollup?days=28{q1}"))
+                .await
+                .ok();
+            let _ = rollup.try_set(v);
+            let _ = pending.try_update(|p| *p -= 1);
+        });
+        let q2 = q.clone();
+        spawn_local(async move {
+            let v = get_json::<TopVideos>(&format!("/api/analytics/top?days=28&limit=15{q2}"))
+                .await
+                .ok();
+            let _ = top.try_set(v);
+            let _ = pending.try_update(|p| *p -= 1);
+        });
+        spawn_local(async move {
+            let v = get_json::<Daily>(&format!("/api/analytics/daily?days=7{q}"))
+                .await
+                .ok();
+            let _ = daily.try_set(v);
+            let _ = pending.try_update(|p| *p -= 1);
+        });
+        spawn_local(async move {
+            // Recommendations read the clips DB — channel-agnostic.
+            let v = get_json::<Recs>("/api/analytics/recommendations")
+                .await
+                .ok();
+            let _ = recs.try_set(v);
+            let _ = pending.try_update(|p| *p -= 1);
+        });
+    };
+    load(None);
     spawn_local(async move {
-        let v = get_json::<Rollup>("/api/analytics/rollup?days=28")
-            .await
-            .ok();
-        let _ = rollup.try_set(v);
-        let _ = pending.try_update(|p| *p -= 1);
-    });
-    spawn_local(async move {
-        let v = get_json::<TopVideos>("/api/analytics/top?days=28&limit=15")
-            .await
-            .ok();
-        let _ = top.try_set(v);
-        let _ = pending.try_update(|p| *p -= 1);
-    });
-    spawn_local(async move {
-        let v = get_json::<Daily>("/api/analytics/daily?days=7").await.ok();
-        let _ = daily.try_set(v);
-        let _ = pending.try_update(|p| *p -= 1);
-    });
-    spawn_local(async move {
-        let v = get_json::<Recs>("/api/analytics/recommendations")
-            .await
-            .ok();
-        let _ = recs.try_set(v);
-        let _ = pending.try_update(|p| *p -= 1);
+        if let Ok(r) = get_json::<ChannelsResp>("/api/channels").await {
+            let _ = channels.try_set(r.channels);
+        }
     });
 
     // app.js: fetch("/api/analytics/rollup").then(() => location.reload())
@@ -457,9 +493,41 @@ pub fn Analytics() -> impl IntoView {
                 </p>
             </div>
             <div class="row">
+                <a class="btn btn-sm" href="/api/oauth/yt/start">"＋ Connect a channel"</a>
                 <button class="btn btn-ghost btn-sm" on:click=refresh>"↻ Refresh (1h cache)"</button>
             </div>
         </div>
+        {move || {
+            let list = channels.get();
+            if list.len() < 2 {
+                return ().into_any();
+            }
+            // Channel toggle: tap a chip → that channel's numbers everywhere.
+            let active_id = selected.get().unwrap_or_else(|| list[0].id.clone());
+            view! {
+                <div class="row mb-24" style="flex-wrap: wrap; gap: 8px;">
+                    {list
+                        .into_iter()
+                        .map(|c| {
+                            let id = c.id.clone();
+                            let is_active = c.id == active_id;
+                            view! {
+                                <button
+                                    class=if is_active { "btn btn-sm" } else { "btn btn-ghost btn-sm" }
+                                    on:click=move |_| {
+                                        selected.set(Some(id.clone()));
+                                        load(Some(id.clone()));
+                                    }
+                                >
+                                    {format!("📺 {}", c.title)}
+                                </button>
+                            }
+                        })
+                        .collect_view()}
+                </div>
+            }
+                .into_any()
+        }}
         {move || {
             if pending.get() > 0 {
                 return view! {

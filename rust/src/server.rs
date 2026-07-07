@@ -32,8 +32,8 @@ use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
 use crate::{
-    analytics, captions, clip, commentary, config, distribute, listicle, srt, story, transcribe,
-    voice,
+    analytics, captions, channels, clip, commentary, config, distribute, listicle, srt, story,
+    transcribe, voice,
 };
 // Adapter::deliver is a trait method — bring it into scope for the publish path.
 use distribute::Adapter;
@@ -143,6 +143,11 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/analytics/daily", get(an_daily))
         .route("/api/analytics/retention/:vid", get(an_retention))
         .route("/api/analytics/recommendations", get(an_recommendations))
+        // Self-serve channel connect: teammate clicks Connect on Analytics →
+        // Google consent with THEIR login → channel + analytics wired.
+        .route("/api/channels", get(channels_list))
+        .route("/api/oauth/yt/start", get(oauth_yt_start))
+        .route("/api/oauth/yt/callback", get(oauth_yt_callback))
         // LLM proxy for Page Agent — injects the server-side DeepSeek key so the
         // browser agent can drive the editor without the key landing in client JS.
         .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
@@ -961,7 +966,7 @@ async fn an_rollup(
     let days = q.days.unwrap_or(28);
     let root = s.root.clone();
     let v = tokio::task::spawn_blocking(move || {
-        analytics::channel_rollup(&root, days).unwrap_or_else(
+        analytics::channel_rollup(&root, days, q.channel.as_deref()).unwrap_or_else(
             |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
         )
     })
@@ -978,7 +983,7 @@ async fn an_top(
     let limit = q.limit.unwrap_or(15);
     let root = s.root.clone();
     let v = tokio::task::spawn_blocking(move || {
-        analytics::top_videos(&root, days, limit).unwrap_or_else(
+        analytics::top_videos(&root, days, limit, q.channel.as_deref()).unwrap_or_else(
             |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
         )
     })
@@ -994,7 +999,7 @@ async fn an_daily(
     let days = q.days.unwrap_or(7);
     let root = s.root.clone();
     let v = tokio::task::spawn_blocking(move || {
-        analytics::daily_series(&root, days).unwrap_or_else(
+        analytics::daily_series(&root, days, q.channel.as_deref()).unwrap_or_else(
             |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
         )
     })
@@ -1003,16 +1008,117 @@ async fn an_daily(
     Json(v)
 }
 
-async fn an_retention(State(s): State<AppState>, AxumPath(vid): AxumPath<String>) -> Json<Value> {
+async fn an_retention(
+    State(s): State<AppState>,
+    AxumPath(vid): AxumPath<String>,
+    axum::extract::Query(q): axum::extract::Query<ChannelParam>,
+) -> Json<Value> {
     let root = s.root.clone();
     let v = tokio::task::spawn_blocking(move || {
-        analytics::retention_curve(&root, &vid).unwrap_or_else(
+        analytics::retention_curve(&root, &vid, q.channel.as_deref()).unwrap_or_else(
             |e| json!({ "configured": analytics::configured(&root), "error": e.to_string() }),
         )
     })
     .await
     .unwrap_or(json!({ "error": "join failed" }));
     Json(v)
+}
+
+// ── Channels: self-serve connect (web OAuth) + connected list ─────────────────
+//
+// GET /api/oauth/yt/start → 302 to Google consent (their login, their browser);
+// GET /api/oauth/yt/callback → code→tokens, store channel in data/channels.json;
+// GET /api/channels → token-free list for the Analytics channel toggle.
+// Tokens never leave the server (channels.rs is the only reader).
+
+async fn channels_list(State(s): State<AppState>) -> Json<Value> {
+    Json(channels::public_list(&s.root))
+}
+
+async fn oauth_yt_start(State(s): State<AppState>) -> Response {
+    let Some(web) = channels::web_client(&s.root) else {
+        return Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .body(Body::from(
+                "channel connect not configured — set YT_WEB_CLIENT_ID / YT_WEB_CLIENT_SECRET \
+                 in .env (web OAuth client) and redeploy",
+            ))
+            .unwrap();
+    };
+    let state = channels::issue_state();
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header(header::LOCATION, channels::auth_url(&web, &state))
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[derive(Deserialize)]
+struct OauthCallbackParams {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+async fn oauth_yt_callback(
+    State(s): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<OauthCallbackParams>,
+) -> Response {
+    let fail = |msg: &str| {
+        // Human-facing: the person mid-connect sees why + how to retry.
+        Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+            .body(Body::from(format!(
+                "<html><body style=\"font-family:sans-serif;background:#05080d;color:#f5f8ff;\
+                 display:grid;place-items:center;min-height:100vh\"><div style=\"max-width:32rem\">\
+                 <h2>⚠ Channel connect failed</h2><p>{}</p>\
+                 <p><a style=\"color:#ac4bff\" href=\"/api/oauth/yt/start\">Try again</a> · \
+                 <a style=\"color:#ac4bff\" href=\"/#/analytics\">Back to Analytics</a></p>\
+                 </div></body></html>",
+                html_escape(msg)
+            )))
+            .unwrap()
+    };
+    if let Some(err) = q.error {
+        return fail(&format!("Google returned: {err}"));
+    }
+    let (Some(code), Some(state)) = (q.code, q.state) else {
+        return fail("missing code/state in the callback");
+    };
+    if !channels::consume_state(&state) {
+        return fail("state check failed (link expired or reused) — start again");
+    }
+    let Some(web) = channels::web_client(&s.root) else {
+        return fail("web OAuth client not configured on the server");
+    };
+    let root = s.root.clone();
+    let result = tokio::task::spawn_blocking(move || -> Result<String> {
+        let (access, refresh) = channels::exchange_code(&web, &code)?;
+        let (id, title) = channels::own_channel(&access)?;
+        channels::upsert(&root, &id, &title, &refresh)?;
+        Ok(title)
+    })
+    .await
+    .map_err(|e| anyhow!("join: {e}"))
+    .and_then(|r| r);
+    match result {
+        Ok(title) => {
+            println!("  ✓ channel connected: {title}");
+            Response::builder()
+                .status(StatusCode::FOUND)
+                .header(header::LOCATION, "/#/analytics")
+                .body(Body::empty())
+                .unwrap()
+        }
+        Err(e) => fail(&format!("{e:#}")),
+    }
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {
@@ -1030,11 +1136,18 @@ async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {
 #[derive(Deserialize)]
 struct DaysParam {
     days: Option<u32>,
+    /// Connected-channel id (data/channels.json); absent = default channel.
+    channel: Option<String>,
 }
 #[derive(Deserialize)]
 struct TopParam {
     days: Option<u32>,
     limit: Option<usize>,
+    channel: Option<String>,
+}
+#[derive(Deserialize)]
+struct ChannelParam {
+    channel: Option<String>,
 }
 
 // ── LLM proxy — keeps the DeepSeek key server-side for Page Agent ─────────────

@@ -7,6 +7,7 @@ mod autopilot;
 mod brief;
 mod captions;
 mod capture;
+mod channels;
 mod clip;
 mod commentary;
 mod config;

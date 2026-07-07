@@ -245,6 +245,32 @@ pub fn yt_access_token(root: &Path) -> Option<String> {
     let cid = config::env_var(root, "YT_CLIENT_ID")?;
     let secret = config::env_var(root, "YT_CLIENT_SECRET")?;
     let refresh = config::env_var(root, "YT_REFRESH_TOKEN")?;
+    refresh_access_token(&cid, &secret, &refresh)
+}
+
+/// Channel-aware token: a connected channel from data/channels.json (the
+/// self-serve web-OAuth store) when one matches — the store's FIRST channel
+/// when `channel` is None — falling back to the single-channel .env creds.
+/// yt_report queries `channel==MINE`, which resolves per-token, so this is
+/// the only per-channel switch the analytics layer needs.
+pub fn yt_access_token_for(root: &Path, channel: Option<&str>) -> Option<String> {
+    if let (Some(web), Some((_, refresh))) = (
+        crate::channels::web_client(root),
+        crate::channels::refresh_token_for(root, channel),
+    ) {
+        if let Some(tok) = refresh_access_token(&web.client_id, &web.client_secret, &refresh) {
+            return Some(tok);
+        }
+    }
+    // A specific store channel was requested but didn't resolve → never
+    // silently serve another channel's numbers via the env fallback.
+    if channel.is_some() && crate::channels::refresh_token_for(root, channel).is_none() {
+        return None;
+    }
+    yt_access_token(root)
+}
+
+fn refresh_access_token(cid: &str, secret: &str, refresh: &str) -> Option<String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -252,9 +278,9 @@ pub fn yt_access_token(root: &Path) -> Option<String> {
     let resp = client
         .post("https://oauth2.googleapis.com/token")
         .form(&[
-            ("client_id", cid.as_str()),
-            ("client_secret", secret.as_str()),
-            ("refresh_token", refresh.as_str()),
+            ("client_id", cid),
+            ("client_secret", secret),
+            ("refresh_token", refresh),
             ("grant_type", "refresh_token"),
         ])
         .send()

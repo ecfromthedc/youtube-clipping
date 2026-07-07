@@ -70,19 +70,25 @@ fn http_client() -> reqwest::blocking::Client {
         .expect("reqwest client")
 }
 
-/// Is YouTube Analytics OAuth configured? Probes by attempting a token refresh.
+/// Is YouTube Analytics OAuth configured? Probes by attempting a token refresh
+/// (connected-channels store first, .env single-channel fallback).
 pub fn configured(root: &Path) -> bool {
-    capture::yt_access_token(root).is_some()
+    capture::yt_access_token_for(root, None).is_some()
+}
+
+/// Cache-key segment isolating each channel's numbers (multi-channel toggle).
+fn chan_key(channel: Option<&str>) -> &str {
+    channel.unwrap_or("env")
 }
 
 /// Channel rollup: total views, subs, est revenue, avg retention, avg swipe, top video.
 /// Returns a JSON object shaped for the dashboard. Empty result on any failure.
-pub fn channel_rollup(root: &Path, days: u32) -> Result<Value> {
-    let cache_key = format!("rollup_{days}");
+pub fn channel_rollup(root: &Path, days: u32, channel: Option<&str>) -> Result<Value> {
+    let cache_key = format!("rollup_{days}_{}", chan_key(channel));
     if let Some(c) = read_cache(root, &cache_key) {
         return Ok(c);
     }
-    let token = match capture::yt_access_token(root) {
+    let token = match capture::yt_access_token_for(root, channel) {
         Some(t) => t,
         None => return Ok(json!({ "configured": false })),
     };
@@ -129,12 +135,12 @@ pub fn channel_rollup(root: &Path, days: u32) -> Result<Value> {
 }
 
 /// Top-N videos by views over the window, with per-video metrics + health classification.
-pub fn top_videos(root: &Path, days: u32, limit: usize) -> Result<Value> {
-    let cache_key = format!("top_{days}_{limit}");
+pub fn top_videos(root: &Path, days: u32, limit: usize, channel: Option<&str>) -> Result<Value> {
+    let cache_key = format!("top_{days}_{limit}_{}", chan_key(channel));
     if let Some(c) = read_cache(root, &cache_key) {
         return Ok(c);
     }
-    let token = match capture::yt_access_token(root) {
+    let token = match capture::yt_access_token_for(root, channel) {
         Some(t) => t,
         None => return Ok(json!({ "configured": false, "videos": [] })),
     };
@@ -215,12 +221,12 @@ pub fn top_videos(root: &Path, days: u32, limit: usize) -> Result<Value> {
 }
 
 /// 7-day daily views + revenue sparkline. Returns `{dates: [], views: [], revenue: []}`.
-pub fn daily_series(root: &Path, days: u32) -> Result<Value> {
-    let cache_key = format!("daily_{days}");
+pub fn daily_series(root: &Path, days: u32, channel: Option<&str>) -> Result<Value> {
+    let cache_key = format!("daily_{days}_{}", chan_key(channel));
     if let Some(c) = read_cache(root, &cache_key) {
         return Ok(c);
     }
-    let token = match capture::yt_access_token(root) {
+    let token = match capture::yt_access_token_for(root, channel) {
         Some(t) => t,
         None => return Ok(json!({ "configured": false, "dates": [], "views": [], "revenue": [] })),
     };
@@ -259,8 +265,8 @@ pub fn daily_series(root: &Path, days: u32) -> Result<Value> {
 }
 
 /// Per-video retention curve for the retention popover. `vid` is the YouTube video id.
-pub fn retention_curve(root: &Path, vid: &str) -> Result<Value> {
-    let token = match capture::yt_access_token(root) {
+pub fn retention_curve(root: &Path, vid: &str, channel: Option<&str>) -> Result<Value> {
+    let token = match capture::yt_access_token_for(root, channel) {
         Some(t) => t,
         None => return Ok(json!({ "configured": false, "curve": [] })),
     };

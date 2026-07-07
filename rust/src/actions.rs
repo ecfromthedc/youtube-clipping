@@ -53,6 +53,11 @@ pub const ACTIONS: &[Action] = &[
         marker: "Refresh (1h cache)",
         file: "pages/analytics.rs",
     },
+    Action {
+        surface: "on Analytics, click '\u{FF0B} Connect a channel' to link a YouTube channel via its Google login, and toggle between connected channels with the \u{1F4FA} chips",
+        marker: "Connect a channel",
+        file: "pages/analytics.rs",
+    },
 ];
 
 /// Build the copilot system prompt from the action map.
