@@ -148,6 +148,13 @@ pub async fn run(root: &Path, port: u16) -> Result<()> {
         .route("/api/channels", get(channels_list))
         .route("/api/oauth/yt/start", get(oauth_yt_start))
         .route("/api/oauth/yt/callback", get(oauth_yt_callback))
+        // Channel workspaces: content filed per channel + slot scheduling.
+        .route("/api/channels/:id/map-postiz", post(channel_map_postiz))
+        .route("/api/channels/:id/slots", post(channel_set_slots))
+        .route("/api/channels/:id/slots-next", get(channel_slots_next))
+        .route("/api/channels/:id/queue", get(channel_queue))
+        .route("/api/library", get(library_list))
+        .route("/api/library/assign", post(library_assign))
         // LLM proxy for Page Agent — injects the server-side DeepSeek key so the
         // browser agent can drive the editor without the key landing in client JS.
         .route("/api/llm/proxy/chat/completions", post(llm_proxy_chat))
@@ -1119,6 +1126,301 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+// ── Channel workspaces: per-channel content library + slot scheduler ──────────
+//
+// "Folders" are virtual: a render stays in its project dir and carries a
+// `<file>.channel` sidecar naming the channel it's filed under (same sidecar
+// pattern as `.title` / `.publish.json`) — no file duplication, survives the
+// existing pipeline untouched. Scheduling reuses publish_to_postiz (schedule +
+// date) against the channel's EXPLICITLY mapped integration id.
+
+#[derive(Deserialize)]
+struct MapPostizBody {
+    integration_id: String,
+}
+
+async fn channel_map_postiz(
+    State(s): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+    Json(b): Json<MapPostizBody>,
+) -> Result<Json<Value>, AppError> {
+    channels::set_postiz(&s.root, &id, &b.integration_id).map_err(AppError)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct SlotsBody {
+    times: Vec<String>,
+}
+
+async fn channel_set_slots(
+    State(s): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+    Json(b): Json<SlotsBody>,
+) -> Result<Json<Value>, AppError> {
+    channels::set_slots(&s.root, &id, &b.times).map_err(AppError)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+fn postiz_conn(root: &Path) -> Result<(String, String)> {
+    let api_url = std::env::var("POSTIZ_API_URL").unwrap_or_else(|_| {
+        config::load_settings(root)
+            .ok()
+            .and_then(|y| {
+                y["distribution"]["postiz"]["api_url"]
+                    .as_str()
+                    .map(String::from)
+            })
+            .unwrap_or_else(|| "https://api.postiz.com/public/v1".to_string())
+    });
+    let token = config::env_var(root, "POSTIZ_API_TOKEN")
+        .ok_or_else(|| anyhow!("POSTIZ_API_TOKEN not set"))?;
+    Ok((api_url, token))
+}
+
+/// Scheduled/queued Postiz posts for ONE integration id — strictly filtered;
+/// posts whose integration can't be identified are DROPPED (never show or act
+/// on teammates' content — shared-account guardrail).
+fn queued_posts_for(root: &Path, integration_id: &str) -> Vec<Value> {
+    let Ok((api_url, token)) = postiz_conn(root) else {
+        return vec![];
+    };
+    let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return vec![];
+    };
+    let now = chrono::Utc::now();
+    let start = (now - chrono::Duration::days(1)).format("%Y-%m-%dT%H:%M:%SZ");
+    let end = (now + chrono::Duration::days(14)).format("%Y-%m-%dT%H:%M:%SZ");
+    let data: Value = match client
+        .get(format!("{api_url}/posts"))
+        .header("Authorization", &token)
+        .query(&[
+            ("startDate", start.to_string()),
+            ("endDate", end.to_string()),
+        ])
+        .send()
+        .and_then(|r| r.error_for_status())
+        .and_then(|r| r.json())
+    {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+    let posts: Vec<Value> = if let Some(arr) = data.as_array() {
+        arr.clone()
+    } else {
+        data.get("posts")
+            .or_else(|| data.get("data"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    posts
+        .into_iter()
+        .filter(|p| {
+            let iid = p
+                .pointer("/integration/id")
+                .and_then(Value::as_str)
+                .or_else(|| p.get("integrationId").and_then(Value::as_str))
+                .or_else(|| {
+                    p.pointer("/integration/integrationId")
+                        .and_then(Value::as_str)
+                });
+            iid == Some(integration_id)
+        })
+        .collect()
+}
+
+fn find_channel(root: &Path, id: &str) -> Result<channels::Channel> {
+    channels::load(root)
+        .into_iter()
+        .find(|c| c.id == id)
+        .ok_or_else(|| anyhow!("unknown channel {id}"))
+}
+
+#[derive(Deserialize)]
+struct SlotsNextParam {
+    n: Option<usize>,
+}
+
+/// Next open posting slots for a channel: its slot times (ET), minus any slot
+/// within 10 minutes of an already-queued post on its integration.
+async fn channel_slots_next(
+    State(s): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+    axum::extract::Query(q): axum::extract::Query<SlotsNextParam>,
+) -> Result<Json<Value>, AppError> {
+    let want = q.n.unwrap_or(6).min(24);
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || -> Result<Value> {
+        let ch = find_channel(&root, &id)?;
+        let times = channels::slot_times(&ch);
+        let now = chrono::Utc::now().fixed_offset();
+        // Overfetch so collisions still leave `want` open slots.
+        let raw = distribute::assign_slots(want * 3, &times, channels::SLOT_TZ, now);
+        let taken: Vec<i64> = match &ch.postiz_integration_id {
+            Some(iid) => queued_posts_for(&root, iid)
+                .iter()
+                .filter_map(|p| {
+                    p.get("publishDate")
+                        .or_else(|| p.get("date"))
+                        .and_then(Value::as_str)
+                        .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+                        .map(|d| d.timestamp())
+                })
+                .collect(),
+            None => vec![],
+        };
+        let open: Vec<String> = raw
+            .into_iter()
+            .filter(|slot| {
+                chrono::DateTime::parse_from_rfc3339(slot)
+                    .map(|d| {
+                        let ts = d.timestamp();
+                        !taken.iter().any(|t| (t - ts).abs() < 600)
+                    })
+                    .unwrap_or(false)
+            })
+            .take(want)
+            .collect();
+        Ok(json!({
+            "channel": id,
+            "tz": channels::SLOT_TZ,
+            "times": times,
+            "mapped": ch.postiz_integration_id.is_some(),
+            "slots": open,
+        }))
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))?
+    .map_err(AppError)?;
+    Ok(Json(v))
+}
+
+/// Upcoming queue for a channel's mapped integration (read-only, filtered).
+async fn channel_queue(
+    State(s): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+) -> Result<Json<Value>, AppError> {
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || -> Result<Value> {
+        let ch = find_channel(&root, &id)?;
+        let Some(iid) = ch.postiz_integration_id.clone() else {
+            return Ok(json!({ "channel": id, "mapped": false, "queue": [] }));
+        };
+        let queue: Vec<Value> = queued_posts_for(&root, &iid)
+            .iter()
+            .map(|p| {
+                json!({
+                    "id": p.get("id"),
+                    "date": p.get("publishDate").or_else(|| p.get("date")),
+                    "state": p.get("state"),
+                    "title": p.pointer("/settings/title")
+                        .or_else(|| p.get("content"))
+                        .and_then(Value::as_str)
+                        .map(|t| t.chars().take(80).collect::<String>()),
+                })
+            })
+            .collect();
+        Ok(json!({ "channel": id, "mapped": true, "integration_id": iid, "queue": queue }))
+    })
+    .await
+    .map_err(|e| AppError(anyhow!("join: {e}")))?
+    .map_err(AppError)?;
+    Ok(Json(v))
+}
+
+const LIBRARY_KINDS: [&str; 4] = ["renders", "compiles", "stories", "commentary"];
+
+/// Every render across every project, with its channel assignment + publish
+/// state — the data behind the per-channel "folders".
+async fn library_list(State(s): State<AppState>) -> Json<Value> {
+    let root = s.root.clone();
+    let v = tokio::task::spawn_blocking(move || {
+        let editor_dir = config::data_dir(&root).join("editor");
+        let mut items: Vec<Value> = Vec::new();
+        if let Ok(projects) = std::fs::read_dir(&editor_dir) {
+            for proj in projects.flatten() {
+                let pid = proj.file_name().to_string_lossy().to_string();
+                for kind in LIBRARY_KINDS {
+                    let dir = proj.path().join(kind);
+                    let Ok(rd) = std::fs::read_dir(&dir) else {
+                        continue;
+                    };
+                    for f in rd.flatten() {
+                        let p = f.path();
+                        if p.extension().and_then(|e| e.to_str()) != Some("mp4") {
+                            continue;
+                        }
+                        let name = f.file_name().to_string_lossy().to_string();
+                        let title = std::fs::read_to_string(format!("{}.title", p.display()))
+                            .unwrap_or_default();
+                        let channel = std::fs::read_to_string(format!("{}.channel", p.display()))
+                            .map(|c| c.trim().to_string())
+                            .unwrap_or_default();
+                        let published = p.with_extension("publish.json").exists();
+                        items.push(json!({
+                            "project": pid,
+                            "kind": kind,
+                            "file": name,
+                            "path": format!("/api/projects/{pid}/files/{kind}/{name}"),
+                            "title": title,
+                            "channel": if channel.is_empty() { Value::Null } else { json!(channel) },
+                            "published": published,
+                        }));
+                    }
+                }
+            }
+        }
+        items.sort_by(|a, b| {
+            b["file"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(a["file"].as_str().unwrap_or(""))
+        });
+        json!({ "items": items })
+    })
+    .await
+    .unwrap_or(json!({ "items": [] }));
+    Json(v)
+}
+
+#[derive(Deserialize)]
+struct AssignBody {
+    project: String,
+    kind: String,
+    file: String,
+    /// Channel id to file under; empty string = unassign.
+    channel: String,
+}
+
+async fn library_assign(
+    State(s): State<AppState>,
+    Json(b): Json<AssignBody>,
+) -> Result<Json<Value>, AppError> {
+    // Trust boundary: all three path parts come off the wire.
+    if !LIBRARY_KINDS.contains(&b.kind.as_str()) {
+        return Err(AppError(anyhow!("bad kind")));
+    }
+    if b.project.contains(['/', '.']) || b.file.contains('/') || b.file.contains("..") {
+        return Err(AppError(anyhow!("bad path")));
+    }
+    let abs = project_dir(&s.root, &b.project).join(&b.kind).join(&b.file);
+    if !abs.exists() {
+        return Err(AppError(anyhow!("render not found")));
+    }
+    let sidecar = format!("{}.channel", abs.display());
+    if b.channel.is_empty() {
+        let _ = std::fs::remove_file(&sidecar);
+    } else {
+        find_channel(&s.root, &b.channel).map_err(AppError)?; // must be a connected channel
+        std::fs::write(&sidecar, &b.channel).map_err(|e| AppError(anyhow!("sidecar: {e}")))?;
+    }
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn an_recommendations(State(s): State<AppState>) -> Json<Value> {

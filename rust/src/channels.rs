@@ -33,6 +33,14 @@ const DEFAULT_REDIRECT: &str = "https://tidestiller.risingtidesviral.com/api/oau
 static PENDING_STATES: Mutex<Vec<(String, u64)>> = Mutex::new(Vec::new());
 const STATE_TTL_SECS: u64 = 600;
 
+/// Default posting slots (ET), research-tuned for YouTube Shorts: the first
+/// 30–60 min decide distribution, so slots sit just AHEAD of the three US
+/// scroll peaks — pre-commute (07:00), lunch (12:15), evening prime (19:30).
+/// Per-channel override via `slot_times`; the closed loop's by_hour rollup
+/// refines these once a channel has real data.
+pub const DEFAULT_SLOTS: [&str; 3] = ["07:00", "12:15", "19:30"];
+pub const SLOT_TZ: &str = "America/New_York";
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub id: String,
@@ -40,6 +48,13 @@ pub struct Channel {
     pub connected_at: String,
     /// Never serialized into API responses — see `public_list`.
     pub refresh_token: String,
+    /// ⛔ SHARED POSTIZ ACCOUNT: publishing only ever targets this explicitly
+    /// mapped integration id — set deliberately per channel, never inferred.
+    #[serde(default)]
+    pub postiz_integration_id: Option<String>,
+    /// Posting slots "HH:MM" (ET). None → DEFAULT_SLOTS.
+    #[serde(default)]
+    pub slot_times: Option<Vec<String>>,
 }
 
 fn store_path(root: &Path) -> PathBuf {
@@ -76,16 +91,70 @@ pub fn upsert(root: &Path, id: &str, title: &str, refresh_token: &str) -> Result
             title: title.to_string(),
             connected_at: now,
             refresh_token: refresh_token.to_string(),
+            postiz_integration_id: None,
+            slot_times: None,
         });
     }
     save(root, &all)
 }
 
-/// Token-free view for the API: [{id, title, connected_at}].
+/// Map a channel to its Postiz integration — the ONLY way publishing learns an
+/// integration id (explicit per-channel, per the shared-account guardrail).
+pub fn set_postiz(root: &Path, id: &str, integration_id: &str) -> Result<()> {
+    if integration_id.trim().is_empty() {
+        bail!("integration_id must be explicit (non-empty)");
+    }
+    let mut all = load(root);
+    let c = all
+        .iter_mut()
+        .find(|c| c.id == id)
+        .ok_or_else(|| anyhow!("unknown channel {id}"))?;
+    c.postiz_integration_id = Some(integration_id.trim().to_string());
+    save(root, &all)
+}
+
+/// Per-channel posting slots ("HH:MM", 1-6 entries).
+pub fn set_slots(root: &Path, id: &str, times: &[String]) -> Result<()> {
+    if times.is_empty() || times.len() > 6 {
+        bail!("1-6 slot times");
+    }
+    for t in times {
+        let ok = t.len() == 5
+            && t.as_bytes()[2] == b':'
+            && t[..2].parse::<u32>().map(|h| h < 24).unwrap_or(false)
+            && t[3..].parse::<u32>().map(|m| m < 60).unwrap_or(false);
+        if !ok {
+            bail!("bad slot time {t:?} — use HH:MM");
+        }
+    }
+    let mut all = load(root);
+    let c = all
+        .iter_mut()
+        .find(|c| c.id == id)
+        .ok_or_else(|| anyhow!("unknown channel {id}"))?;
+    c.slot_times = Some(times.to_vec());
+    save(root, &all)
+}
+
+pub fn slot_times(c: &Channel) -> Vec<String> {
+    c.slot_times
+        .clone()
+        .unwrap_or_else(|| DEFAULT_SLOTS.iter().map(|s| s.to_string()).collect())
+}
+
+/// Token-free view for the API: id/title/connected_at/postiz mapping/slots.
 pub fn public_list(root: &Path) -> Value {
     let list: Vec<Value> = load(root)
         .iter()
-        .map(|c| json!({ "id": c.id, "title": c.title, "connected_at": c.connected_at }))
+        .map(|c| {
+            json!({
+                "id": c.id,
+                "title": c.title,
+                "connected_at": c.connected_at,
+                "postiz_integration_id": c.postiz_integration_id,
+                "slot_times": slot_times(c),
+            })
+        })
         .collect();
     json!({ "channels": list })
 }

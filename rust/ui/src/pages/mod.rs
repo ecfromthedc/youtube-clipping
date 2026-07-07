@@ -2,6 +2,7 @@
 //! shared files (main.rs, http.rs, this mod list, styles.css).
 
 pub mod analytics;
+pub mod channels_page;
 pub mod dashboard;
 pub mod new_project;
 pub mod pipeline;

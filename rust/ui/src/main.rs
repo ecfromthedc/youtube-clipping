@@ -52,6 +52,7 @@ fn page_for(route: String) -> AnyView {
         "/pipeline" => view! { <pages::pipeline::Pipeline /> }.into_any(),
         "/studio" => view! { <pages::studio::Studio /> }.into_any(),
         "/analytics" => view! { <pages::analytics::Analytics /> }.into_any(),
+        "/channels" => view! { <pages::channels_page::ChannelsPage /> }.into_any(),
         r if r.starts_with("/studio/") => {
             let slug = r["/studio/".len()..].to_string();
             view! { <pages::studio_format::StudioFormat slug=slug /> }.into_any()
@@ -92,6 +93,7 @@ fn Topbar(route: RwSignal<String>) -> impl IntoView {
             <nav class="topbar-nav">
                 {nav("Projects", "/")}
                 {nav("Studio", "/studio")}
+                {nav("Channels", "/channels")}
                 {nav("Analytics", "/analytics")}
                 {nav("Pipeline", "/pipeline")}
                 <span class="pill live">

@@ -58,6 +58,11 @@ pub const ACTIONS: &[Action] = &[
         marker: "Connect a channel",
         file: "pages/analytics.rs",
     },
+    Action {
+        surface: "on Channels (#/channels), each connected account is a content folder: 'file here' assigns a render to a channel, '\u{1F4C5} Deploy' schedules it into one of the channel's next open posting slots, and the Upcoming queue shows what's scheduled",
+        marker: "\u{1F4C5} Deploy",
+        file: "pages/channels_page.rs",
+    },
 ];
 
 /// Build the copilot system prompt from the action map.
