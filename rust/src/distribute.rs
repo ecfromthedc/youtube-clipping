@@ -16,6 +16,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, FixedOffset, SecondsFormat, TimeZone};
 use chrono_tz::Tz;
+use rt_publish::{post_value, summarize_schedule_response, ScheduleRequest};
 use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -350,22 +351,19 @@ impl Adapter for PostizAdapter {
             _ => caption.clone(),
         };
         let title: String = title_src.chars().take(100).collect();
-        let body = json!({
-            "type": self.schedule,
-            "date": meta.date.clone().unwrap_or_else(db::now),
-            "shortLink": false,
-            "tags": [],
-            "posts": [{
-                "integration": {"id": integration_id},
-                "value": [{"content": caption,
-                           "image": [{"id": media.get("id"), "path": media.get("path")}]}],
-                "settings": {
-                    "__type": meta.platform.clone().unwrap_or_else(|| "youtube".into()),
-                    "title": title,
-                    "type": meta.privacy.clone().unwrap_or_else(|| "public".into()),
-                },
-            }],
+        // Build the POST /posts body via rt_publish::ScheduleRequest — wire-equivalent
+        // to the previous hand-rolled json!({...}) block (asserted in wire_equivalence test).
+        let image = vec![json!({"id": media.get("id"), "path": media.get("path")})];
+        let settings = json!({
+            "__type": meta.platform.clone().unwrap_or_else(|| "youtube".into()),
+            "title": title,
+            "type": meta.privacy.clone().unwrap_or_else(|| "public".into()),
         });
+        let body = ScheduleRequest::new(integration_id, meta.date.clone().unwrap_or_else(db::now))
+            .with_post_type(&self.schedule)
+            .with_value(vec![post_value(caption, None, image)])
+            .with_settings(settings)
+            .to_body();
         let resp: Value = client
             .post(format!("{}/posts", self.api_url))
             .header("Authorization", &self.token)
@@ -373,7 +371,9 @@ impl Adapter for PostizAdapter {
             .send()?
             .error_for_status()?
             .json()?;
-        Ok(post_id(&resp))
+        // Normalize via rt_publish then fall back to "posted" (preserves post_id() semantics).
+        let schedule_resp = summarize_schedule_response(&resp);
+        Ok(schedule_resp.id.unwrap_or_else(|| "posted".to_string()))
     }
 }
 
@@ -771,6 +771,115 @@ mod tests {
         assert_eq!(post_id(&json!([])), "posted"); // empty list → fallback
         assert_eq!(post_id(&json!({"postId": "", "id": "x"})), "x"); // falsy postId → id
         assert_eq!(post_id(&json!({})), "posted");
+    }
+
+    /// Wire-equivalence: ScheduleRequest::to_body() must produce the identical JSON
+    /// that the old hand-rolled json!({...}) block produced for the POST /posts call.
+    /// Tests three representative cases: explicit date+platform, default date, and "now" schedule type.
+    #[test]
+    fn wire_equivalence_schedule_request_matches_old_body() {
+        // -- Case 1: explicit platform / privacy / date, matching how deliver() sets up the body --
+        let integration_id = "intg-abc";
+        let caption = "great clip #shorts";
+        let date = "2026-08-01T14:00:00Z";
+        let platform = "youtube";
+        let privacy = "public";
+        let schedule_type = "schedule";
+        let media_id = json!("media-99");
+        let media_path = json!("/uploads/clip.mp4");
+
+        // Old body (the hand-rolled json!() block from before this PR).
+        let title_src = caption; // title falls back to caption when no explicit title
+        let title: String = title_src.chars().take(100).collect();
+        let old_body = json!({
+            "type": schedule_type,
+            "date": date,
+            "shortLink": false,
+            "tags": [],
+            "posts": [{
+                "integration": {"id": integration_id},
+                "value": [{"content": caption,
+                           "image": [{"id": &media_id, "path": &media_path}]}],
+                "settings": {
+                    "__type": platform,
+                    "title": title,
+                    "type": privacy,
+                },
+            }],
+        });
+
+        // New body via ScheduleRequest — must be byte-identical as serde_json::Value.
+        let image = vec![json!({"id": &media_id, "path": &media_path})];
+        let settings = json!({
+            "__type": platform,
+            "title": title,
+            "type": privacy,
+        });
+        let new_body = ScheduleRequest::new(integration_id, date)
+            .with_post_type(schedule_type)
+            .with_value(vec![post_value(caption, None, image)])
+            .with_settings(settings)
+            .to_body();
+
+        assert_eq!(
+            old_body, new_body,
+            "POST /posts body must be wire-identical"
+        );
+
+        // -- Case 2: null media fields (media.get("id") returns null when key absent) --
+        let null_img = json!({"id": serde_json::Value::Null, "path": serde_json::Value::Null});
+        let old_null = json!({
+            "type": schedule_type,
+            "date": date,
+            "shortLink": false,
+            "tags": [],
+            "posts": [{
+                "integration": {"id": integration_id},
+                "value": [{"content": caption,
+                           "image": [{"id": null, "path": null}]}],
+                "settings": {"__type": platform, "title": title, "type": privacy},
+            }],
+        });
+        let new_null = ScheduleRequest::new(integration_id, date)
+            .with_post_type(schedule_type)
+            .with_value(vec![post_value(caption, None, vec![null_img])])
+            .with_settings(json!({"__type": platform, "title": title, "type": privacy}))
+            .to_body();
+        assert_eq!(
+            old_null, new_null,
+            "null media fields must be wire-identical"
+        );
+
+        // -- Case 3: "now" schedule type with default platform/privacy fallbacks --
+        let old_now = json!({
+            "type": "now",
+            "date": date,
+            "shortLink": false,
+            "tags": [],
+            "posts": [{
+                "integration": {"id": integration_id},
+                "value": [{"content": caption,
+                           "image": [{"id": null, "path": null}]}],
+                "settings": {
+                    "__type": "youtube",   // default fallback
+                    "title": title,
+                    "type": "public",      // default fallback
+                },
+            }],
+        });
+        let new_now = ScheduleRequest::new(integration_id, date)
+            .with_post_type("now")
+            .with_value(vec![post_value(
+                caption,
+                None,
+                vec![json!({"id": null, "path": null})],
+            )])
+            .with_settings(json!({"__type": "youtube", "title": title, "type": "public"}))
+            .to_body();
+        assert_eq!(
+            old_now, new_now,
+            "\"now\" schedule type body must be wire-identical"
+        );
     }
 
     #[test]
