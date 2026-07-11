@@ -9,6 +9,7 @@ name = "ycp"
 path = "src/main.rs"
 
 [dependencies]
+rt-publish = { git = "https://github.com/ecfromthedc/rt-agent-kit", rev = "d70ccd548cfd1c8ecd6f93dff43d7acfb4197dcc" }
 anyhow = "1"
 chrono = "0.4"
 chrono-tz = "0.9"
