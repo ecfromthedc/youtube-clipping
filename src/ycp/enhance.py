@@ -6,8 +6,9 @@ ffmpeg); the thin `apply_*` wrappers execute them.
 
 Title/CTA text is passed to ffmpeg via `textfile=` (ffmpeg reads it from a file),
 which sidesteps drawtext's fragile inline-text escaping — so titles with
-apostrophes/colons (e.g. "Don't sleep on 5:00") render correctly. The font is a
-stock macOS font (always present, no spaces in the path).
+apostrophes/colons (e.g. "Don't sleep on 5:00") render correctly. The font is the
+vendored TikTok Sans Overlay cut (no spaces in the path), falling back to a stock
+macOS font when the asset is missing.
 
 See SSEMBLE-PARITY.md for the full map.
 """
@@ -17,8 +18,12 @@ import functools
 import subprocess
 from pathlib import Path
 
-# Stock macOS font — always present, no spaces in the path (drawtext-safe).
-DEFAULT_FONT = "/System/Library/Fonts/Helvetica.ttc"
+# Official font: TikTok Sans Overlay cut (wght 650), vendored in assets/ (path has
+# no spaces — drawtext-safe). Falls back to stock macOS Helvetica if assets are absent.
+_TIKTOK_OVERLAY = (Path(__file__).resolve().parents[2]
+                   / "assets" / "tiktok-font" / "fonts" / "TikTokSans-Overlay.ttf")
+DEFAULT_FONT = (str(_TIKTOK_OVERLAY) if _TIKTOK_OVERLAY.is_file()
+                else "/System/Library/Fonts/Helvetica.ttc")
 
 
 @functools.lru_cache(maxsize=None)

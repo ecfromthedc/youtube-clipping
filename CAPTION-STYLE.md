@@ -4,15 +4,16 @@ The visual target for burned-in captions across owned channels. Reference photo:
 `reference/caption-style.png` — @hotseatYT (Hot Seat). *(photo to be added — see PR/commit.)*
 
 ## The look (what the photo shows)
-- Heavy **condensed** display font (Arial Black / Impact family). Photo is all-caps;
-  **we run lowercase** — we borrow the photo's position + color, not its case.
+- Heavy display font — official cut is **TikTok Sans Overlay** (wght 650, opsz 36,
+  vendored in `assets/tiktok-font/`; Arial Black / Impact as fallbacks). Photo is
+  all-caps; **we run lowercase** — we borrow the photo's position + color, not its case.
 - **Golden yellow** fill `#FFDE00` (≈ code `ACTIVE = (255, 222, 0)`).
 - **Fat black outline** on every glyph — legible over any footage.
 - **2 lines max**, centered, sitting in the **lower third** (≈65–70% down).
 - Channel **`@handle` watermark** top-left, small, low-opacity white.
 
 ## Maps to the `captions:` knobs (settings.yaml → src/ycp/captions.py)
-- `case: lower` — **keep lowercase** (Eric's call; Phoenix Protocol's RULE #1).
+- `case: lower` — **keep lowercase** unless the new channel style says otherwise.
   Photo is uppercase, but we only adopt its **position + color**, not its case.
 - `size_pct: ~9` — captions sized **down one notch** from the photo's ~10%.
 - font / stroke / color / 2-line lower-third layout already match the code.

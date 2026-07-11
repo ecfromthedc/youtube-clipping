@@ -101,8 +101,17 @@ pub fn build_chunks(segments: &[Segment], max_words: usize, min_dwell: f64) -> V
 // outline, and a byte-identical FRAME SCHEDULE (frame count, which chunk/title is
 // shown per frame), which is the deterministic part cross-checked via `ycp caprender`.
 
-/// Heavy display fonts (opus look). First existing path wins. Mirrors FONT_CANDIDATES.
-pub(crate) const FONT_CANDIDATES: [&str; 3] = [
+/// Official caption font: TikTok Sans Overlay cut (wght 650, opsz 36), vendored in
+/// the project's assets/. First existing path wins; system heavies remain as
+/// fallbacks. Mirrors FONT_CANDIDATES in captions.py. The assets path is resolved
+/// at compile time from the crate dir — on machines without the source tree it
+/// simply won't exist and the system fonts take over (an explicit `font_path`
+/// override still beats all of these).
+pub(crate) const FONT_CANDIDATES: [&str; 4] = [
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../assets/tiktok-font/fonts/TikTokSans-Overlay.ttf"
+    ),
     "/System/Library/Fonts/Supplemental/Arial Black.ttf",
     "/System/Library/Fonts/Supplemental/Impact.ttf",
     "/Library/Fonts/Arial Black.ttf",

@@ -19,8 +19,14 @@ from pathlib import Path
 
 from .srt import Segment
 
-# Heavy display fonts (opus look). First existing path wins; falls back to Pillow default.
+# Official caption font: TikTok Sans "Overlay" cut (pinned wght 650, opsz 36 —
+# pixel-matched to real TikTok covers), vendored from the RT "TikTok Overlay Type"
+# pack into assets/. First existing path wins; system heavies remain as fallbacks,
+# then Pillow default.
+_TIKTOK_OVERLAY = (Path(__file__).resolve().parents[2]
+                   / "assets" / "tiktok-font" / "fonts" / "TikTokSans-Overlay.ttf")
 FONT_CANDIDATES = (
+    str(_TIKTOK_OVERLAY),
     "/System/Library/Fonts/Supplemental/Arial Black.ttf",
     "/System/Library/Fonts/Supplemental/Impact.ttf",
     "/Library/Fonts/Arial Black.ttf",
