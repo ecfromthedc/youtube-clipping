@@ -1,0 +1,14 @@
+# rt-fleet manifest — see ecfromthedc/rt-fleet for the contract.
+[agent]
+name = "ycp-autopilot"
+description = "Daily 7AM YouTube clipping autopilot (scripts/autopilot.sh)"
+entrypoint = "/bin/bash scripts/autopilot.sh"
+schedule = "0 7 * * *"
+owner_repo = "ecfromthedc/youtube-clipping"
+deploy_target = "launchd"
+
+[agent.health]
+# Beats not wired yet — wrap the launchd ProgramArguments with
+# `rt-fleet wrap ycp-autopilot -- /bin/bash scripts/autopilot.sh` to enable.
+expected_cadence = "daily"
+heartbeat_key = "ycp-autopilot"
