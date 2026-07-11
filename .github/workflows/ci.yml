@@ -1,0 +1,12 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    uses: ecfromthedc/rt-ci/.github/workflows/rust.yml@main
+    with:
+      working-directory: rust
